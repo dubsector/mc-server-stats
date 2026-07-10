@@ -57,10 +57,13 @@ jobs:
           # validation explicitly against the branch and wait for it before merging.
           gh workflow run validate.yml --ref "$BRANCH"
 
+          # Filter to workflow_dispatch runs: the PR may also spawn a pull_request run
+          # stuck in action_required (bot PRs need manual workflow approval), and the
+          # poll must not pick that one up.
           sleep 15
           RUN_ID=""
           for _ in $(seq 1 10); do
-            RUN_ID=$(gh run list --workflow=validate.yml --branch "$BRANCH" --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+            RUN_ID=$(gh run list --workflow=validate.yml --branch "$BRANCH" --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId // empty')
             [ -n "$RUN_ID" ] && break
             sleep 10
           done
