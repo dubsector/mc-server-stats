@@ -40,6 +40,11 @@ jobs:
         if: steps.diff.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Fine-grained PAT (this repo only, Pull requests: read/write). Branch
+          # protection requires one approving review; the PR is authored by
+          # github-actions[bot] via GITHUB_TOKEN, so an approval from this token's
+          # owner satisfies it. The merge itself still uses GITHUB_TOKEN.
+          APPROVE_TOKEN: ${{ secrets.DATA_PR_APPROVE_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
           DATE=$(date -u +%Y-%m-%d)
@@ -77,5 +82,11 @@ jobs:
           fi
 
           gh run watch "$RUN_ID" --exit-status
+
+          if [ -z "$APPROVE_TOKEN" ]; then
+            echo "DATA_PR_APPROVE_TOKEN secret is not set; branch protection blocks the merge without an approval" >&2
+            exit 1
+          fi
+          GH_TOKEN="$APPROVE_TOKEN" gh pr review "$PR_URL" --approve --body "Automated approval of the daily data snapshot after validation passed."
 
           gh pr merge "$PR_URL" --squash --delete-branch
