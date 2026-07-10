@@ -2,7 +2,10 @@ name: Collect data
 
 on:
   schedule:
-    - cron: '23 4 * * *'
+    # Shortly after midnight UTC so each snapshot lands at the start of the UTC date
+    # it is keyed by. Not exactly 00:00 — that is GitHub's most congested slot and
+    # scheduled runs there get delayed or dropped.
+    - cron: '17 0 * * *'
   workflow_dispatch:
 
 permissions: {}
