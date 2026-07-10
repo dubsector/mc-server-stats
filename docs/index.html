@@ -115,9 +115,30 @@
     </section>
 
     <footer class="site-footer">
-      <p>Data sources: <a href="https://bstats.org" target="_blank" rel="noopener">bStats</a> (version counts, global server-software breakdown), <a href="https://fill.papermc.io" target="_blank" rel="noopener">PaperMC Fill API</a> (Paper/Folia build channels), Leaf's own build API, and a string-pattern heuristic for Purpur, which does not publish a build-channel API.</p>
-      <p>Per-version history only starts accumulating from the day this collector first ran — bStats does not expose historical per-version breakdowns, only a current snapshot, so early date ranges will look sparse. The ecosystem panel is likewise a current snapshot with no version-level detail beyond the four tracked projects.</p>
-      <p><a href="https://github.com/dubsector/mc-server-stats" target="_blank" rel="noopener">Source on GitHub</a></p>
+      <div class="footer-cols">
+        <div>
+          <h3>Data sources</h3>
+          <ul>
+            <li><a href="https://bstats.org" target="_blank" rel="noopener">bStats</a> for server counts per version and the ecosystem breakdown</li>
+            <li><a href="https://fill.papermc.io" target="_blank" rel="noopener">PaperMC Fill API</a> for Paper and Folia build channels</li>
+            <li>Leaf build API for Leaf build channels</li>
+            <li>Version-string heuristic for Purpur, which has no channel API</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Notes</h3>
+          <ul>
+            <li>Data refreshes once a day, shortly after midnight UTC</li>
+            <li>Per-version history accumulates from July 10, 2026. bStats only exposes current snapshots, so earlier dates cannot be backfilled</li>
+            <li>The ecosystem panel is a current snapshot without version-level detail</li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>mc-server-stats</span>
+        <a href="https://github.com/dubsector/mc-server-stats" target="_blank" rel="noopener">Source on GitHub</a>
+        <a href="https://dubsector.dev" target="_blank" rel="noopener">dubsector.dev</a>
+      </div>
     </footer>
   </div>
 
