@@ -66,7 +66,7 @@ Then serve the `docs/` folder with any static file server.
 docs/            GitHub Pages root (site + committed data)
   data/          JSON snapshots the site renders
 scripts/         collect.mjs, the daily collector
-.github/         workflows: collect-data, validate, zizmor, scorecard
+.github/         workflows: collect-data, validate, token-reminder, zizmor, scorecard
 ```
 
 ## License

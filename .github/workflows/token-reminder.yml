@@ -1,0 +1,64 @@
+name: Token expiry reminder
+
+on:
+  schedule:
+    # Weekly, Monday 05:23 UTC. Off the congested top of the hour.
+    - cron: '23 5 * * 1'
+  workflow_dispatch:
+    inputs:
+      warn_days:
+        description: Days before expiry to open the reminder issue
+        required: false
+        default: '14'
+
+permissions: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Check DATA_PR_APPROVE_TOKEN expiry
+        env:
+          APPROVE_TOKEN: ${{ secrets.DATA_PR_APPROVE_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          WARN_DAYS: ${{ inputs.warn_days || '14' }}
+        run: |
+          case "$WARN_DAYS" in (*[!0-9]*|'') echo "warn_days must be a number" >&2; exit 1;; esac
+
+          if [ -z "$APPROVE_TOKEN" ]; then
+            msg="The DATA_PR_APPROVE_TOKEN secret is missing. Nightly data PR merges fail without it. Generate a fine-grained token (this repo only, Pull requests read/write) and save it as the repository secret."
+          else
+            # Any authenticated request echoes the token's expiry in a response
+            # header; /rate_limit needs no permissions and costs no rate limit.
+            headers=$(curl -sS -D - -o /dev/null -H "Authorization: Bearer $APPROVE_TOKEN" https://api.github.com/rate_limit || true)
+            status=$(printf '%s' "$headers" | head -1 | awk '{print $2}')
+            expiry=$(printf '%s' "$headers" | tr -d '\r' | grep -i '^github-authentication-token-expiration:' | head -1 | sed 's/^[^:]*: *//')
+
+            if [ "$status" != "200" ]; then
+              msg="The DATA_PR_APPROVE_TOKEN secret no longer authenticates (HTTP ${status:-no response}). It was likely revoked or has expired. Nightly data PR merges will fail until a replacement fine-grained token (this repo only, Pull requests read/write) is saved as the repository secret."
+            elif [ -z "$expiry" ]; then
+              echo "Token has no expiration. Nothing to do."
+              exit 0
+            else
+              exp_epoch=$(date -u -d "$expiry" +%s)
+              now_epoch=$(date -u +%s)
+              days_left=$(( (exp_epoch - now_epoch) / 86400 ))
+              echo "Token expires $expiry ($days_left days left, warning threshold $WARN_DAYS)."
+              if [ "$days_left" -gt "$WARN_DAYS" ]; then
+                exit 0
+              fi
+              msg="The DATA_PR_APPROVE_TOKEN fine-grained token expires on $expiry ($days_left days left). Generate a replacement (this repo only, Pull requests read/write) at https://github.com/settings/personal-access-tokens/new and update the repository secret at https://github.com/$REPO/settings/secrets/actions, or nightly data PR merges will start failing."
+            fi
+          fi
+
+          TITLE="Replace DATA_PR_APPROVE_TOKEN"
+          existing=$(gh issue list --repo "$REPO" --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            echo "Reminder issue #$existing already open."
+            exit 0
+          fi
+          gh issue create --repo "$REPO" --title "$TITLE" --body "$msg"
