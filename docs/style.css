@@ -297,6 +297,11 @@ a {
   padding: 4px 10px;
 }
 
+.show-more {
+  display: block;
+  margin: 14px auto 2px;
+}
+
 /* Donut */
 
 .donut-center-value {
