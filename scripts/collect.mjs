@@ -30,8 +30,13 @@ const STABLE_CHANNEL_NAMES = new Set(['stable', 'release', 'default']);
 const EXPERIMENTAL_PATTERN =
   /pre-?release|release candidate|\brc\b|-rc-?\d|-pre-?\d|\bsnapshot\b|^\d{2}w\d{2}[a-z]$/i;
 
+const FETCH_TIMEOUT_MS = 30000;
+
 async function fetchJson(url) {
-  const res = await fetch(url, { headers: { accept: 'application/json' } });
+  const res = await fetch(url, {
+    headers: { accept: 'application/json' },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
   if (!res.ok) {
     throw new Error(`${url} -> HTTP ${res.status}`);
   }
@@ -49,15 +54,17 @@ async function fetchBstatsLine(pluginId, chartId) {
 }
 
 // 30-minute resolution is ~17k points/year per project — too heavy to commit and ship
-// to browsers. Keep the last point of each UTC day; the trend is what matters.
+// to browsers. Keep the last value of each UTC day, stamped at that day's midnight so
+// timestamps align across projects (the totals tooltip matches series by exact ts).
 // bStats zero-pads every chart back to 2015 regardless of when the project first
 // reported, so drop the leading zeros too.
 function downsampleDaily(points) {
+  const chronological = [...points].sort((a, b) => a[0] - b[0]);
   const byDay = new Map();
-  for (const [ts, value] of points) {
-    byDay.set(new Date(ts).toISOString().slice(0, 10), [ts, value]);
+  for (const [ts, value] of chronological) {
+    byDay.set(new Date(ts).toISOString().slice(0, 10), value);
   }
-  const daily = [...byDay.values()].sort((a, b) => a[0] - b[0]);
+  const daily = [...byDay.entries()].map(([day, value]) => [Date.parse(`${day}T00:00:00Z`), value]);
   const firstNonZero = daily.findIndex(([, value]) => value > 0);
   return firstNonZero === -1 ? [] : daily.slice(firstNonZero);
 }
@@ -97,13 +104,10 @@ function channelIsStable(channel) {
 // worth a network round trip.
 async function buildFillChannelMap(fillSlug) {
   const map = new Map();
-  let projectData;
-  try {
-    projectData = await fetchJson(`https://fill.papermc.io/v3/projects/${fillSlug}`);
-  } catch (err) {
-    console.warn(`fill API unavailable for ${fillSlug}: ${err.message}`);
-    return map;
-  }
+  // If this fetch fails, fail the whole run: with no channel map, a brand-new
+  // experimental version with a plain version string would be recorded as stable in
+  // today's snapshot, and snapshots are never revisited. Tomorrow's run retries.
+  const projectData = await fetchJson(`https://fill.papermc.io/v3/projects/${fillSlug}`);
 
   const families = Object.keys(projectData.versions || {}).sort(compareVersionKeysDesc);
   const recentFamilies = families.slice(0, 2);
@@ -127,13 +131,9 @@ async function buildFillChannelMap(fillSlug) {
 
 async function buildLeafChannelMap() {
   const map = new Map();
-  let projectData;
-  try {
-    projectData = await fetchJson('https://api.leafmc.one/v2/projects/leaf');
-  } catch (err) {
-    console.warn(`leafmc API unavailable: ${err.message}`);
-    return map;
-  }
+  // Same as buildFillChannelMap: a dead channel API must fail the run, not silently
+  // degrade to the regex heuristic.
+  const projectData = await fetchJson('https://api.leafmc.one/v2/projects/leaf');
 
   const versions = [...(projectData.versions || [])].sort(compareVersionKeysDesc);
   const recentVersions = versions.slice(0, 3);
