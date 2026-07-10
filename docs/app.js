@@ -73,6 +73,12 @@
   // All data is keyed by UTC day, so dates must render in UTC too; the browser's
   // local timezone would shift midnight-stamped points to the previous day for
   // viewers west of UTC and contradict the "Snapshot: YYYY-MM-DD" captions.
+  // Rounding tiny nonzero shares to "0.0%" reads as "none"; show "<0.1%" instead.
+  function fmtShare(v) {
+    if (v > 0 && v < 0.05) return '<0.1%';
+    return v.toFixed(1) + '%';
+  }
+
   function formatDate(ts, withYear) {
     var opts = { month: 'short', day: 'numeric', timeZone: 'UTC' };
     if (withYear) opts.year = 'numeric';
@@ -353,7 +359,7 @@
       root.appendChild(bar);
 
       var valText = svgEl('text', { x: labelW + w + 8, y: y + barH / 2 + 4, class: 'data-label strong' });
-      valText.textContent = opts.metric === 'share' ? val.toFixed(1) + '%' : fmtCompact(val);
+      valText.textContent = opts.metric === 'share' ? fmtShare(val) : fmtCompact(val);
       root.appendChild(valText);
 
       var hitRow = svgEl('rect', { x: 0, y: y, width: W, height: barH + gap, fill: 'transparent' });
@@ -382,7 +388,7 @@
 
       var shareRow = el('div', { class: 'tt-row' });
       shareRow.appendChild(el('span', { class: 'tt-key', text: 'Share' }));
-      shareRow.appendChild(el('span', { class: 'tt-value', text: r.share.toFixed(1) + '%' }));
+      shareRow.appendChild(el('span', { class: 'tt-value', text: fmtShare(r.share) }));
       tooltip.appendChild(shareRow);
       tooltip.classList.add('visible');
     }
@@ -790,7 +796,7 @@
         tooltipRows: [
           ['Status', r.stable ? 'Stable' : 'Experimental'],
           ['Servers', fmtFull(r.count)],
-          ['Share', r.share.toFixed(1) + '%'],
+          ['Share', fmtShare(r.share)],
         ],
       };
     });
@@ -805,7 +811,7 @@
         tooltipRows: [
           ['Versions', String(rest.length)],
           ['Servers', fmtFull(otherCount)],
-          ['Share', otherShare.toFixed(1) + '%'],
+          ['Share', fmtShare(otherShare)],
         ],
       });
     }
@@ -933,12 +939,27 @@
   }
 
   function collectAllRows() {
+    // Denominator for "% of all tracked" is always the four projects' combined
+    // totals, independent of active filters, so the number keeps one meaning.
+    var grandTotal = 0;
+    PROJECTS.forEach(function (p) {
+      grandTotal += projectVersionRows(p.key).total || 0;
+    });
+
     var rows = [];
     activeProjectList().forEach(function (p) {
       var snapshot = projectVersionRows(p.key);
       snapshot.rows.forEach(function (r) {
         if (!matchesStability(r.stable) || !matchesSearch(r.version)) return;
-        rows.push({ project: p.name, projectKey: p.key, version: r.version, stable: r.stable, count: r.count, share: r.share });
+        rows.push({
+          project: p.name,
+          projectKey: p.key,
+          version: r.version,
+          stable: r.stable,
+          count: r.count,
+          share: r.share,
+          shareAll: grandTotal ? (r.count / grandTotal) * 100 : 0,
+        });
       });
     });
     return rows;
@@ -957,7 +978,8 @@
       { key: 'version', label: 'Version', numeric: false },
       { key: 'stable', label: 'Status', numeric: false },
       { key: 'count', label: 'Servers', numeric: true },
-      { key: 'share', label: 'Share', numeric: true },
+      { key: 'share', label: '% of project', numeric: true },
+      { key: 'shareAll', label: '% of all tracked', numeric: true },
     ];
 
     var sorted = rows.slice().sort(function (a, b) {
@@ -1003,7 +1025,8 @@
           el('td', { text: r.version }),
           statusCell,
           el('td', { class: 'num', text: fmtFull(r.count) }),
-          el('td', { class: 'num', text: r.share.toFixed(1) + '%' }),
+          el('td', { class: 'num', text: fmtShare(r.share) }),
+          el('td', { class: 'num', text: fmtShare(r.shareAll) }),
         ])
       );
     });
@@ -1085,7 +1108,7 @@
         dim: false,
         tooltipRows: [
           ['Servers', fmtFull(e.count)],
-          ['Share', ((e.count / total) * 100).toFixed(1) + '%'],
+          ['Share', fmtShare((e.count / total) * 100)],
         ],
       };
     });
@@ -1098,7 +1121,7 @@
         tooltipRows: [
           ['Includes', otherNames.slice(0, 5).join(', ') + (otherNames.length > 5 ? ', more' : '')],
           ['Servers', fmtFull(otherCount)],
-          ['Share', ((otherCount / total) * 100).toFixed(1) + '%'],
+          ['Share', fmtShare((otherCount / total) * 100)],
         ],
       });
     }
