@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>mc-server-stats — Paper, Folia, Purpur &amp; Leaf version adoption</title>
+  <meta name="description" content="Tracks Minecraft server software version adoption across Paper, Folia, Purpur, and Leaf, split by stable and experimental builds." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="site-header">
+      <h1>mc-server-stats</h1>
+      <p>Version adoption across Paper, Folia, Purpur, and Leaf, split by stable and experimental builds, pulled daily from bStats and each project's own build-channel API.</p>
+      <div class="last-updated" id="last-updated">loading…</div>
+    </header>
+
+    <section class="stat-row" id="stat-row" aria-label="Current server counts"></section>
+
+    <div class="filter-row" role="group" aria-label="Filters">
+      <div class="filter-group" id="filter-projects" aria-label="Software">
+        <span class="group-label">Software</span>
+      </div>
+      <div class="filter-group" id="filter-stability" aria-label="Stability">
+        <span class="group-label">Stability</span>
+      </div>
+      <div class="filter-group" id="filter-range" aria-label="Time range">
+        <span class="group-label">Range</span>
+      </div>
+      <div class="filter-group" id="filter-metric" aria-label="Metric">
+        <span class="group-label">Metric</span>
+      </div>
+      <div class="filter-group">
+        <span class="group-label">Version</span>
+        <input class="search-input" id="version-search" type="text" placeholder="e.g. 26.2" autocomplete="off" />
+      </div>
+    </div>
+
+    <section class="card" id="card-totals">
+      <div class="card-head">
+        <div>
+          <h2>Total servers over time</h2>
+          <div class="subtitle">Real bStats history — populated from day one, no accumulation needed.</div>
+        </div>
+        <button class="table-toggle" data-toggle-table="totals">Table view</button>
+      </div>
+      <div id="legend-totals" class="legend"></div>
+      <div id="chart-totals" class="chart-pos"></div>
+      <div id="table-totals" class="hidden"></div>
+    </section>
+
+    <section class="card" id="card-breakdown">
+      <div class="card-head">
+        <div>
+          <h2>Current version breakdown</h2>
+          <div class="subtitle">Today's snapshot per project, colored by build stability.</div>
+        </div>
+        <button class="table-toggle" data-toggle-table="breakdown">Table view</button>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="legend-swatch rect" style="background:var(--status-good)"></span>Stable</span>
+        <span class="legend-item"><span class="legend-swatch rect" style="background:var(--status-warning)"></span>Experimental</span>
+      </div>
+      <div id="breakdown-grid" class="multiples-grid"></div>
+      <div id="table-breakdown" class="hidden"></div>
+    </section>
+
+    <section class="card" id="card-adoption">
+      <div class="card-head">
+        <div>
+          <h2>Version adoption over time</h2>
+          <div class="subtitle">Per-version trend since tracking began — watch new versions climb and old ones decline.</div>
+        </div>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="legend-swatch" style="background:var(--status-good)"></span>Stable</span>
+        <span class="legend-item"><span class="legend-swatch" style="background:var(--status-warning)"></span>Experimental</span>
+      </div>
+      <div id="adoption-grid" class="multiples-grid"></div>
+    </section>
+
+    <section class="card" id="card-table">
+      <div class="card-head">
+        <div>
+          <h2>All versions</h2>
+          <div class="subtitle">Sortable — click a column header.</div>
+        </div>
+      </div>
+      <div id="full-table"></div>
+    </section>
+
+    <section class="card" id="card-ecosystem">
+      <div class="card-head">
+        <div>
+          <h2>Ecosystem-wide market share</h2>
+          <div class="subtitle">Every server-software name bStats sees, not just the four tracked above — current snapshot only, top 12 plus everything smaller folded into "Other".</div>
+        </div>
+      </div>
+      <div id="ecosystem-list"></div>
+    </section>
+
+    <footer class="site-footer">
+      <p>Data sources: <a href="https://bstats.org" target="_blank" rel="noopener">bStats</a> (version counts, global server-software breakdown), <a href="https://fill.papermc.io" target="_blank" rel="noopener">PaperMC Fill API</a> (Paper/Folia build channels), Leaf's own build API, and a string-pattern heuristic for Purpur, which does not publish a build-channel API.</p>
+      <p>Per-version history only starts accumulating from the day this collector first ran — bStats does not expose historical per-version breakdowns, only a current snapshot, so early date ranges will look sparse. The ecosystem panel is likewise a current snapshot with no version-level detail beyond the four tracked projects.</p>
+      <p><a href="https://github.com/dubsector/mc-server-stats" target="_blank" rel="noopener">Source on GitHub</a></p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

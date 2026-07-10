@@ -1,0 +1,880 @@
+(function () {
+  'use strict';
+
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+
+  var PROJECTS = [
+    { key: 'paper', name: 'Paper', varName: '--series-paper' },
+    { key: 'folia', name: 'Folia', varName: '--series-folia' },
+    { key: 'purpur', name: 'Purpur', varName: '--series-purpur' },
+    { key: 'leaf', name: 'Leaf', varName: '--series-leaf' },
+  ];
+
+  var RANGES = [
+    { key: '7d', label: '7d', days: 7 },
+    { key: '30d', label: '30d', days: 30 },
+    { key: '90d', label: '90d', days: 90 },
+    { key: 'all', label: 'All', days: null },
+  ];
+
+  var state = {
+    activeProjects: new Set(PROJECTS.map(function (p) { return p.key; })),
+    stability: 'all',
+    range: '30d',
+    metric: 'count',
+    search: '',
+    sort: { col: 'count', dir: 'desc' },
+  };
+
+  var data = { meta: null, projects: {}, ecosystem: null };
+
+  function cssVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  function projectColor(key) {
+    var p = PROJECTS.filter(function (x) { return x.key === key; })[0];
+    return p ? cssVar(p.varName) : cssVar('--text-muted');
+  }
+
+  function statusColor(stable) {
+    return cssVar(stable ? '--status-good' : '--status-warning');
+  }
+
+  function fmtFull(n) {
+    return Math.round(n).toLocaleString('en-US');
+  }
+
+  function fmtCompact(n) {
+    var v = Math.abs(n);
+    if (v >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (v >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+    return String(Math.round(n));
+  }
+
+  function formatDate(ts, withYear) {
+    var opts = { month: 'short', day: 'numeric' };
+    if (withYear) opts.year = 'numeric';
+    return new Date(ts).toLocaleDateString('en-US', opts);
+  }
+
+  function niceCeil(max) {
+    if (max <= 0) return 1;
+    var mag = Math.pow(10, Math.floor(Math.log10(max)));
+    var norm = max / mag;
+    var step = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10;
+    return step * mag;
+  }
+
+  function el(tag, attrs, children) {
+    var node = document.createElement(tag);
+    if (attrs) {
+      Object.keys(attrs).forEach(function (k) {
+        if (k === 'class') node.className = attrs[k];
+        else if (k === 'text') node.textContent = attrs[k];
+        else if (k.indexOf('on') === 0 && typeof attrs[k] === 'function') node.addEventListener(k.slice(2), attrs[k]);
+        else node.setAttribute(k, attrs[k]);
+      });
+    }
+    (children || []).forEach(function (c) { if (c) node.appendChild(c); });
+    return node;
+  }
+
+  function svgEl(tag, attrs) {
+    var node = document.createElementNS(SVG_NS, tag);
+    if (attrs) {
+      Object.keys(attrs).forEach(function (k) { node.setAttribute(k, attrs[k]); });
+    }
+    return node;
+  }
+
+  // ---------------------------------------------------------------- data
+
+  function loadJson(path) {
+    return fetch(path).then(function (res) {
+      if (!res.ok) throw new Error('failed to load ' + path);
+      return res.json();
+    });
+  }
+
+  function loadAll() {
+    var projectLoads = PROJECTS.map(function (p) {
+      return loadJson('data/history/' + p.key + '.json').then(function (json) {
+        data.projects[p.key] = json;
+      });
+    });
+    return Promise.all(
+      projectLoads.concat([
+        loadJson('data/meta.json').then(function (json) { data.meta = json; }),
+        loadJson('data/ecosystem.json').then(function (json) { data.ecosystem = json; }),
+      ])
+    );
+  }
+
+  function latestDateKey(versionsMap) {
+    var keys = Object.keys(versionsMap || {});
+    if (!keys.length) return null;
+    return keys.sort()[keys.length - 1];
+  }
+
+  function rangeCutoff() {
+    var r = RANGES.filter(function (x) { return x.key === state.range; })[0];
+    if (!r || r.days == null) return null;
+    return Date.now() - r.days * 86400000;
+  }
+
+  function matchesSearch(version) {
+    if (!state.search) return true;
+    return version.toLowerCase().indexOf(state.search) !== -1;
+  }
+
+  function matchesStability(stable) {
+    if (state.stability === 'all') return true;
+    return state.stability === 'stable' ? stable : !stable;
+  }
+
+  // ---------------------------------------------------------------- chart: line
+
+  function renderLineChart(container, series, opts) {
+    opts = opts || {};
+    container.innerHTML = '';
+    container.classList.add('chart-pos');
+
+    var W = opts.width || 880;
+    var H = opts.height || 240;
+    var padL = 46, padR = opts.padR || 96, padT = 14, padB = 26;
+    var plotW = W - padL - padR, plotH = H - padT - padB;
+
+    var visibleSeries = series.filter(function (s) { return !s.hidden; });
+    var allPoints = [];
+    visibleSeries.forEach(function (s) { s.points.forEach(function (pt) { allPoints.push(pt); }); });
+
+    if (!allPoints.length) {
+      container.appendChild(el('div', { class: 'empty-state', text: opts.emptyText || 'No data yet.' }));
+      return;
+    }
+
+    var xs = allPoints.map(function (p) { return p[0]; });
+    var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
+    if (minX === maxX) { minX -= 43200000; maxX += 43200000; }
+
+    var maxY = 0;
+    allPoints.forEach(function (p) { if (p[1] > maxY) maxY = p[1]; });
+    var niceY = niceCeil(maxY || 1);
+
+    function xPos(ts) { return padL + ((ts - minX) / (maxX - minX)) * plotW; }
+    function yPos(v) { return padT + plotH - (v / niceY) * plotH; }
+
+    var root = svgEl('svg', { class: 'chart', viewBox: '0 0 ' + W + ' ' + H });
+
+    var steps = 4;
+    for (var i = 0; i <= steps; i++) {
+      var v = (niceY * i) / steps;
+      var y = yPos(v);
+      root.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: y, y2: y, class: i === 0 ? 'baseline' : 'gridline' }));
+      var t = svgEl('text', { x: padL - 8, y: y + 4, class: 'axis-label', 'text-anchor': 'end' });
+      t.textContent = fmtCompact(v);
+      root.appendChild(t);
+    }
+
+    var spansYears = maxX - minX > 300 * 86400000;
+    [minX, maxX].forEach(function (ts, idx) {
+      var t = svgEl('text', { x: xPos(ts), y: H - 6, class: 'axis-label', 'text-anchor': idx === 0 ? 'start' : 'end' });
+      t.textContent = formatDate(ts, spansYears);
+      root.appendChild(t);
+    });
+
+    visibleSeries.forEach(function (s) {
+      if (s.points.length === 1) {
+        var p0 = s.points[0];
+        root.appendChild(
+          svgEl('circle', { cx: xPos(p0[0]), cy: yPos(p0[1]), r: 4, fill: s.color, stroke: cssVar('--surface-1'), 'stroke-width': 2 })
+        );
+        return;
+      }
+      if (s.points.length < 2) return;
+      var d = s.points
+        .map(function (pt, idx) { return (idx === 0 ? 'M' : 'L') + xPos(pt[0]).toFixed(1) + ',' + yPos(pt[1]).toFixed(1); })
+        .join(' ');
+      root.appendChild(svgEl('path', { d: d, fill: 'none', stroke: s.color, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+      var last = s.points[s.points.length - 1];
+      root.appendChild(
+        svgEl('circle', { cx: xPos(last[0]), cy: yPos(last[1]), r: 4, fill: s.color, stroke: cssVar('--surface-1'), 'stroke-width': 2 })
+      );
+    });
+
+    var labelEntries = visibleSeries
+      .filter(function (s) { return s.points.length; })
+      .map(function (s) {
+        var last = s.points[s.points.length - 1];
+        return { s: s, y: yPos(last[1]), x: xPos(last[0]), val: last[1] };
+      })
+      .sort(function (a, b) { return a.y - b.y; });
+    var minGap = opts.compact ? 12 : 14;
+    for (var li = 1; li < labelEntries.length; li++) {
+      if (labelEntries[li].y - labelEntries[li - 1].y < minGap) {
+        labelEntries[li].y = labelEntries[li - 1].y + minGap;
+      }
+    }
+    labelEntries.forEach(function (le) {
+      var t = svgEl('text', { x: le.x + 8, y: le.y + 3, class: 'data-label strong' });
+      t.textContent = le.s.name + ' ' + fmtCompact(le.val);
+      root.appendChild(t);
+    });
+
+    var crosshair = svgEl('line', { y1: padT, y2: padT + plotH, class: 'gridline', visibility: 'hidden' });
+    var hit = svgEl('rect', { x: padL, y: padT, width: Math.max(plotW, 1), height: Math.max(plotH, 1), fill: 'transparent' });
+    root.appendChild(crosshair);
+    root.appendChild(hit);
+
+    container.appendChild(root);
+    var tooltip = el('div', { class: 'chart-tooltip' });
+    container.appendChild(tooltip);
+
+    var allXs = Array.from(new Set(xs)).sort(function (a, b) { return a - b; });
+
+    function nearestX(target) {
+      var best = allXs[0], bestDiff = Infinity;
+      allXs.forEach(function (x) {
+        var diff = Math.abs(x - target);
+        if (diff < bestDiff) { bestDiff = diff; best = x; }
+      });
+      return best;
+    }
+
+    function handleMove(evt) {
+      var rect = root.getBoundingClientRect();
+      var scaleX = W / rect.width;
+      var mouseX = (evt.clientX - rect.left) * scaleX;
+      var mouseTs = minX + ((mouseX - padL) / plotW) * (maxX - minX);
+      var snapped = nearestX(mouseTs);
+      var sx = xPos(snapped);
+      crosshair.setAttribute('x1', sx);
+      crosshair.setAttribute('x2', sx);
+      crosshair.setAttribute('visibility', 'visible');
+
+      var rows = visibleSeries
+        .map(function (s) {
+          var pt = s.points.filter(function (p) { return p[0] === snapped; })[0];
+          return { name: s.name, color: s.color, value: pt ? pt[1] : null };
+        })
+        .filter(function (r) { return r.value !== null; });
+
+      tooltip.innerHTML = '';
+      tooltip.appendChild(el('div', { class: 'tt-title', text: formatDate(snapped, spansYears) }));
+      rows.forEach(function (r) {
+        var row = el('div', { class: 'tt-row' });
+        var key = el('span', { class: 'tt-key' });
+        var stroke = el('span', { class: 'stroke' });
+        stroke.style.background = r.color;
+        key.appendChild(stroke);
+        key.appendChild(document.createTextNode(r.name));
+        row.appendChild(key);
+        row.appendChild(el('span', { class: 'tt-value', text: fmtFull(r.value) + (opts.suffix || '') }));
+        tooltip.appendChild(row);
+      });
+      tooltip.classList.add('visible');
+      var ttX = (sx / W) * rect.width;
+      var flip = ttX > rect.width - 170;
+      tooltip.style.left = (flip ? ttX - 170 : ttX + 12) + 'px';
+      tooltip.style.top = '6px';
+    }
+
+    function handleLeave() {
+      crosshair.setAttribute('visibility', 'hidden');
+      tooltip.classList.remove('visible');
+    }
+
+    hit.addEventListener('pointermove', handleMove);
+    hit.addEventListener('pointerleave', handleLeave);
+  }
+
+  // ---------------------------------------------------------------- chart: horizontal bars
+
+  function renderBarPanel(container, rows, opts) {
+    opts = opts || {};
+    container.innerHTML = '';
+    container.classList.add('chart-pos');
+
+    if (!rows.length) {
+      container.appendChild(el('div', { class: 'panel-note', text: 'No versions match the current filters.' }));
+      return;
+    }
+
+    var barH = 18, gap = 6, labelW = 84, valueW = 54, padX = 4;
+    var W = 420;
+    var plotW = W - labelW - valueW - padX * 2;
+    var H = rows.length * (barH + gap);
+
+    var maxVal = Math.max.apply(
+      null,
+      rows.map(function (r) { return opts.metric === 'share' ? r.share : r.count; })
+    );
+
+    var root = svgEl('svg', { class: 'chart', viewBox: '0 0 ' + W + ' ' + H });
+    var tooltip = el('div', { class: 'chart-tooltip' });
+
+    rows.forEach(function (r, i) {
+      var y = i * (barH + gap);
+      var val = opts.metric === 'share' ? r.share : r.count;
+      var w = Math.max(2, (val / maxVal) * plotW);
+      var isMatch = matchesSearch(r.version);
+      var dim = state.search && !isMatch;
+
+      var label = svgEl('text', { x: labelW - 8, y: y + barH / 2 + 4, class: dim ? 'data-label' : 'data-label strong', 'text-anchor': 'end' });
+      label.textContent = r.version;
+      root.appendChild(label);
+
+      var bar = svgEl('rect', {
+        x: labelW, y: y, width: w, height: barH, rx: 4,
+        fill: statusColor(r.stable), opacity: dim ? 0.3 : 1,
+      });
+      root.appendChild(bar);
+
+      var valText = svgEl('text', { x: labelW + w + 8, y: y + barH / 2 + 4, class: 'data-label strong' });
+      valText.textContent = opts.metric === 'share' ? val.toFixed(1) + '%' : fmtCompact(val);
+      root.appendChild(valText);
+
+      var hitRow = svgEl('rect', { x: 0, y: y, width: W, height: barH + gap, fill: 'transparent' });
+      hitRow.addEventListener('pointerenter', function () { showRowTooltip(r); });
+      hitRow.addEventListener('pointermove', function (evt) { positionTooltip(evt, root, tooltip); });
+      hitRow.addEventListener('pointerleave', function () { tooltip.classList.remove('visible'); });
+      root.appendChild(hitRow);
+    });
+
+    function showRowTooltip(r) {
+      tooltip.innerHTML = '';
+      tooltip.appendChild(el('div', { class: 'tt-title', text: r.version }));
+      var statusRow = el('div', { class: 'tt-row' });
+      var key = el('span', { class: 'tt-key' });
+      var dot = el('span', { class: 'stroke' });
+      dot.style.background = statusColor(r.stable);
+      key.appendChild(dot);
+      key.appendChild(document.createTextNode(r.stable ? 'Stable' : 'Experimental'));
+      statusRow.appendChild(key);
+      tooltip.appendChild(statusRow);
+
+      var countRow = el('div', { class: 'tt-row' });
+      countRow.appendChild(el('span', { class: 'tt-key', text: 'Servers' }));
+      countRow.appendChild(el('span', { class: 'tt-value', text: fmtFull(r.count) }));
+      tooltip.appendChild(countRow);
+
+      var shareRow = el('div', { class: 'tt-row' });
+      shareRow.appendChild(el('span', { class: 'tt-key', text: 'Share' }));
+      shareRow.appendChild(el('span', { class: 'tt-value', text: r.share.toFixed(1) + '%' }));
+      tooltip.appendChild(shareRow);
+      tooltip.classList.add('visible');
+    }
+
+    container.appendChild(root);
+    container.appendChild(tooltip);
+  }
+
+  function positionTooltip(evt, root, tooltip) {
+    var rect = root.getBoundingClientRect();
+    var x = evt.clientX - rect.left;
+    var y = evt.clientY - rect.top;
+    var flip = x > rect.width - 170;
+    tooltip.style.left = (flip ? x - 170 : x + 14) + 'px';
+    tooltip.style.top = Math.max(0, y - 10) + 'px';
+  }
+
+  // ---------------------------------------------------------------- sections
+
+  function renderStatRow() {
+    var container = document.getElementById('stat-row');
+    container.innerHTML = '';
+    PROJECTS.forEach(function (p) {
+      var servers = (data.projects[p.key] || {}).servers || [];
+      var latest = servers.length ? servers[servers.length - 1][1] : null;
+      var weekAgoTs = servers.length ? servers[servers.length - 1][0] - 7 * 86400000 : null;
+      var weekAgoPoint = null;
+      if (weekAgoTs) {
+        servers.forEach(function (pt) {
+          if (pt[0] <= weekAgoTs) weekAgoPoint = pt;
+        });
+      }
+
+      var tile = el('div', { class: 'stat-tile' });
+      var label = el('div', { class: 'label' });
+      var dot = el('span', { class: 'dot' });
+      dot.style.background = projectColor(p.key);
+      label.appendChild(dot);
+      label.appendChild(document.createTextNode(p.name));
+      tile.appendChild(label);
+      tile.appendChild(el('div', { class: 'value', text: latest == null ? '—' : fmtFull(latest) }));
+
+      if (weekAgoPoint && latest != null) {
+        var delta = latest - weekAgoPoint[1];
+        var pct = weekAgoPoint[1] ? (delta / weekAgoPoint[1]) * 100 : 0;
+        var deltaEl = el('div', { class: 'panel-note' });
+        deltaEl.style.color = delta >= 0 ? cssVar('--success-text') : cssVar('--status-warning');
+        deltaEl.textContent = (delta >= 0 ? '+' : '') + fmtFull(delta) + ' (' + (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%) vs 7d ago';
+        tile.appendChild(deltaEl);
+      }
+
+      var sparkContainer = el('div', { class: 'sparkline' });
+      tile.appendChild(sparkContainer);
+      container.appendChild(tile);
+      renderSparkline(sparkContainer, servers.slice(-60), projectColor(p.key));
+    });
+  }
+
+  function renderSparkline(container, points, color) {
+    if (points.length < 2) return;
+    var W = 240, H = 32, pad = 2;
+    var xs = points.map(function (p) { return p[0]; });
+    var ys = points.map(function (p) { return p[1]; });
+    var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
+    var minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
+    if (minX === maxX) minX -= 1;
+    if (minY === maxY) { minY -= 1; maxY += 1; }
+    function xPos(ts) { return pad + ((ts - minX) / (maxX - minX)) * (W - pad * 2); }
+    function yPos(v) { return H - pad - ((v - minY) / (maxY - minY)) * (H - pad * 2); }
+    var d = points.map(function (p, i) { return (i === 0 ? 'M' : 'L') + xPos(p[0]).toFixed(1) + ',' + yPos(p[1]).toFixed(1); }).join(' ');
+    var root = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H, width: '100%', height: H });
+    root.appendChild(svgEl('path', { d: d, fill: 'none', stroke: color, 'stroke-width': 1.5, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', opacity: 0.85 }));
+    container.appendChild(root);
+  }
+
+  function renderFilters() {
+    var projectsGroup = document.getElementById('filter-projects');
+    PROJECTS.forEach(function (p) {
+      var chip = el('button', {
+        class: 'chip',
+        'aria-pressed': state.activeProjects.has(p.key) ? 'true' : 'false',
+        onclick: function () { toggleProject(p.key); },
+      });
+      var dot = el('span', { class: 'dot' });
+      dot.style.background = projectColor(p.key);
+      chip.appendChild(dot);
+      chip.appendChild(document.createTextNode(p.name));
+      chip.dataset.project = p.key;
+      projectsGroup.appendChild(chip);
+    });
+
+    var stabilityGroup = document.getElementById('filter-stability');
+    [['all', 'All'], ['stable', 'Stable'], ['experimental', 'Experimental']].forEach(function (pair) {
+      var chip = el('button', {
+        class: 'chip',
+        'aria-pressed': state.stability === pair[0] ? 'true' : 'false',
+        text: pair[1],
+        onclick: function () {
+          state.stability = pair[0];
+          renderAll();
+        },
+      });
+      chip.dataset.stability = pair[0];
+      stabilityGroup.appendChild(chip);
+    });
+
+    var rangeGroup = document.getElementById('filter-range');
+    RANGES.forEach(function (r) {
+      var chip = el('button', {
+        class: 'chip',
+        'aria-pressed': state.range === r.key ? 'true' : 'false',
+        text: r.label,
+        onclick: function () {
+          state.range = r.key;
+          renderAll();
+        },
+      });
+      chip.dataset.range = r.key;
+      rangeGroup.appendChild(chip);
+    });
+
+    var metricGroup = document.getElementById('filter-metric');
+    [['count', 'Count'], ['share', '% Share']].forEach(function (pair) {
+      var chip = el('button', {
+        class: 'chip',
+        'aria-pressed': state.metric === pair[0] ? 'true' : 'false',
+        text: pair[1],
+        onclick: function () {
+          state.metric = pair[0];
+          renderAll();
+        },
+      });
+      chip.dataset.metric = pair[0];
+      metricGroup.appendChild(chip);
+    });
+
+    var searchInput = document.getElementById('version-search');
+    searchInput.addEventListener('input', function () {
+      state.search = searchInput.value.trim().toLowerCase();
+      renderAll();
+    });
+
+    document.querySelectorAll('[data-toggle-table]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var key = btn.dataset.toggleTable;
+        var chartId = key === 'totals' ? 'chart-totals' : 'breakdown-grid';
+        var tableId = 'table-' + key;
+        var legendId = key === 'totals' ? 'legend-totals' : null;
+        var chartEl = document.getElementById(chartId);
+        var tableEl = document.getElementById(tableId);
+        var showingTable = !tableEl.classList.contains('hidden');
+        tableEl.classList.toggle('hidden', showingTable);
+        chartEl.classList.toggle('hidden', !showingTable);
+        if (legendId) document.getElementById(legendId).classList.toggle('hidden', !showingTable);
+        btn.textContent = showingTable ? 'Table view' : 'Chart view';
+      });
+    });
+  }
+
+  function toggleProject(key) {
+    if (state.activeProjects.has(key)) state.activeProjects.delete(key);
+    else state.activeProjects.add(key);
+    renderAll();
+  }
+
+  function syncFilterChips() {
+    document.querySelectorAll('[data-project]').forEach(function (chip) {
+      chip.setAttribute('aria-pressed', state.activeProjects.has(chip.dataset.project) ? 'true' : 'false');
+    });
+    document.querySelectorAll('[data-stability]').forEach(function (chip) {
+      chip.setAttribute('aria-pressed', chip.dataset.stability === state.stability ? 'true' : 'false');
+    });
+    document.querySelectorAll('[data-range]').forEach(function (chip) {
+      chip.setAttribute('aria-pressed', chip.dataset.range === state.range ? 'true' : 'false');
+    });
+    document.querySelectorAll('[data-metric]').forEach(function (chip) {
+      chip.setAttribute('aria-pressed', chip.dataset.metric === state.metric ? 'true' : 'false');
+    });
+  }
+
+  function activeProjectList() {
+    return PROJECTS.filter(function (p) { return state.activeProjects.has(p.key); });
+  }
+
+  function renderTotalsChart() {
+    var cutoff = rangeCutoff();
+    var series = activeProjectList().map(function (p) {
+      var servers = (data.projects[p.key] || {}).servers || [];
+      var points = cutoff ? servers.filter(function (pt) { return pt[0] >= cutoff; }) : servers;
+      return { key: p.key, name: p.name, color: projectColor(p.key), points: points };
+    });
+
+    var legend = document.getElementById('legend-totals');
+    legend.innerHTML = '';
+    PROJECTS.forEach(function (p) {
+      var active = state.activeProjects.has(p.key);
+      var item = el('span', {
+        class: 'legend-item',
+        'data-off': active ? 'false' : 'true',
+        onclick: function () { toggleProject(p.key); },
+      });
+      var swatch = el('span', { class: 'legend-swatch' });
+      swatch.style.background = projectColor(p.key);
+      item.appendChild(swatch);
+      item.appendChild(document.createTextNode(p.name));
+      legend.appendChild(item);
+    });
+
+    renderLineChart(document.getElementById('chart-totals'), series, { emptyText: 'Select a project to see its history.' });
+
+    var tableContainer = document.getElementById('table-totals');
+    tableContainer.innerHTML = '';
+    var table = el('table', { class: 'data-table' });
+    var thead = el('thead', {}, [
+      el('tr', {}, [
+        el('th', { text: 'Project' }),
+        el('th', { class: 'num', text: 'Current servers' }),
+        el('th', { class: 'num', text: 'History points' }),
+      ]),
+    ]);
+    table.appendChild(thead);
+    var tbody = el('tbody');
+    activeProjectList().forEach(function (p) {
+      var servers = (data.projects[p.key] || {}).servers || [];
+      var latest = servers.length ? servers[servers.length - 1][1] : null;
+      tbody.appendChild(
+        el('tr', {}, [
+          el('td', { text: p.name }),
+          el('td', { class: 'num', text: latest == null ? '—' : fmtFull(latest) }),
+          el('td', { class: 'num', text: String(servers.length) }),
+        ])
+      );
+    });
+    table.appendChild(tbody);
+    tableContainer.appendChild(table);
+  }
+
+  function projectVersionRows(projectKey) {
+    var proj = data.projects[projectKey];
+    if (!proj) return { rows: [], date: null };
+    var dateKey = latestDateKey(proj.versions);
+    if (!dateKey) return { rows: [], date: null };
+    var raw = proj.versions[dateKey];
+    var total = raw.reduce(function (sum, r) { return sum + r.count; }, 0);
+    var rows = raw.map(function (r) {
+      return { version: r.version, count: r.count, stable: r.stable, share: total ? (r.count / total) * 100 : 0 };
+    });
+    return { rows: rows, date: dateKey, total: total };
+  }
+
+  function renderBreakdownGrid() {
+    var grid = document.getElementById('breakdown-grid');
+    grid.innerHTML = '';
+    var actives = activeProjectList();
+    if (!actives.length) {
+      grid.appendChild(el('div', { class: 'empty-state', text: 'Select at least one project.' }));
+      return;
+    }
+    actives.forEach(function (p) {
+      var snapshot = projectVersionRows(p.key);
+      var filtered = snapshot.rows.filter(function (r) { return matchesStability(r.stable); });
+      filtered.sort(function (a, b) { return b.count - a.count; });
+      var shown = filtered.slice(0, 8);
+
+      var panel = el('div', { class: 'multiple-panel' });
+      var heading = el('h3');
+      var dot = el('span', { class: 'dot' });
+      dot.style.width = '8px';
+      dot.style.height = '8px';
+      dot.style.borderRadius = '50%';
+      dot.style.background = projectColor(p.key);
+      heading.appendChild(dot);
+      heading.appendChild(document.createTextNode(p.name));
+      panel.appendChild(heading);
+
+      var chartHolder = el('div');
+      panel.appendChild(chartHolder);
+      renderBarPanel(chartHolder, shown, { metric: state.metric });
+
+      if (filtered.length > shown.length) {
+        panel.appendChild(el('div', { class: 'panel-note', text: '+' + (filtered.length - shown.length) + ' more in the table below' }));
+      }
+      if (snapshot.date) {
+        panel.appendChild(el('div', { class: 'panel-note', text: 'Snapshot: ' + snapshot.date }));
+      }
+      grid.appendChild(panel);
+    });
+
+    var tableContainer = document.getElementById('table-breakdown');
+    tableContainer.innerHTML = '';
+    tableContainer.appendChild(buildVersionsTable(collectAllRows()));
+  }
+
+  function projectVersionHistorySeries(projectKey, versionNames) {
+    var proj = data.projects[projectKey];
+    if (!proj || !proj.versions) return [];
+    var cutoff = rangeCutoff();
+    var dateKeys = Object.keys(proj.versions).sort();
+    return versionNames.map(function (versionName) {
+      var points = [];
+      dateKeys.forEach(function (dk) {
+        var ts = Date.parse(dk + 'T00:00:00Z');
+        if (cutoff && ts < cutoff) return;
+        var dayRows = proj.versions[dk];
+        var total = dayRows.reduce(function (s, r) { return s + r.count; }, 0);
+        var entry = dayRows.filter(function (r) { return r.version === versionName; })[0];
+        if (entry) {
+          points.push([ts, state.metric === 'share' ? (total ? (entry.count / total) * 100 : 0) : entry.count]);
+        }
+      });
+      var latestEntry = null;
+      dateKeys.slice().reverse().some(function (dk) {
+        var e = proj.versions[dk].filter(function (r) { return r.version === versionName; })[0];
+        if (e) { latestEntry = e; return true; }
+        return false;
+      });
+      return { name: versionName, stable: latestEntry ? latestEntry.stable : true, points: points };
+    });
+  }
+
+  function renderAdoptionGrid() {
+    var grid = document.getElementById('adoption-grid');
+    grid.innerHTML = '';
+    var actives = activeProjectList();
+    if (!actives.length) {
+      grid.appendChild(el('div', { class: 'empty-state', text: 'Select at least one project.' }));
+      return;
+    }
+    actives.forEach(function (p) {
+      var snapshot = projectVersionRows(p.key);
+      var filtered = snapshot.rows.filter(function (r) { return matchesStability(r.stable) && matchesSearch(r.version); });
+      filtered.sort(function (a, b) { return b.count - a.count; });
+      var topNames = filtered.slice(0, 4).map(function (r) { return r.version; });
+
+      var panel = el('div', { class: 'multiple-panel' });
+      var heading = el('h3');
+      var dot = el('span', { class: 'dot' });
+      dot.style.width = '8px';
+      dot.style.height = '8px';
+      dot.style.borderRadius = '50%';
+      dot.style.background = projectColor(p.key);
+      heading.appendChild(dot);
+      heading.appendChild(document.createTextNode(p.name));
+      panel.appendChild(heading);
+
+      if (!topNames.length) {
+        panel.appendChild(el('div', { class: 'panel-note', text: 'No versions match the current filters.' }));
+        grid.appendChild(panel);
+        return;
+      }
+
+      var series = projectVersionHistorySeries(p.key, topNames).map(function (s) {
+        return { name: s.name, color: statusColor(s.stable), points: s.points };
+      });
+      var chartHolder = el('div');
+      panel.appendChild(chartHolder);
+      renderLineChart(chartHolder, series, { compact: true, height: 190, padR: 84, suffix: state.metric === 'share' ? '%' : '' });
+
+      var dateKeys = Object.keys((data.projects[p.key] || {}).versions || {});
+      if (dateKeys.length <= 1) {
+        panel.appendChild(el('div', { class: 'panel-note', text: 'Tracking since ' + (dateKeys[0] || 'today') + ' — trend fills in daily.' }));
+      }
+      grid.appendChild(panel);
+    });
+  }
+
+  function collectAllRows() {
+    var rows = [];
+    activeProjectList().forEach(function (p) {
+      var snapshot = projectVersionRows(p.key);
+      snapshot.rows.forEach(function (r) {
+        if (!matchesStability(r.stable) || !matchesSearch(r.version)) return;
+        rows.push({ project: p.name, projectKey: p.key, version: r.version, stable: r.stable, count: r.count, share: r.share });
+      });
+    });
+    return rows;
+  }
+
+  function buildVersionsTable(rows) {
+    var wrap = el('div');
+    if (!rows.length) {
+      wrap.appendChild(el('div', { class: 'empty-state', text: 'No versions match the current filters.' }));
+      return wrap;
+    }
+
+    var cols = [
+      { key: 'project', label: 'Project', numeric: false },
+      { key: 'version', label: 'Version', numeric: false },
+      { key: 'stable', label: 'Status', numeric: false },
+      { key: 'count', label: 'Servers', numeric: true },
+      { key: 'share', label: 'Share', numeric: true },
+    ];
+
+    var sorted = rows.slice().sort(function (a, b) {
+      var col = state.sort.col, dir = state.sort.dir === 'asc' ? 1 : -1;
+      var av = a[col], bv = b[col];
+      if (typeof av === 'string') return av.localeCompare(bv) * dir;
+      return (av - bv) * dir;
+    });
+
+    var table = el('table', { class: 'data-table' });
+    var headRow = el('tr');
+    cols.forEach(function (c) {
+      var th = el('th', {
+        class: c.numeric ? 'num' : '',
+        text: c.label + (state.sort.col === c.key ? (state.sort.dir === 'asc' ? ' ▲' : ' ▼') : ''),
+        onclick: function () {
+          if (state.sort.col === c.key) state.sort.dir = state.sort.dir === 'asc' ? 'desc' : 'asc';
+          else state.sort = { col: c.key, dir: 'desc' };
+          renderAll();
+        },
+      });
+      headRow.appendChild(th);
+    });
+    table.appendChild(el('thead', {}, [headRow]));
+
+    var tbody = el('tbody');
+    sorted.forEach(function (r) {
+      var pill = el('span', { class: 'status-pill' });
+      var dot = el('span', { class: 'dot' });
+      dot.style.background = statusColor(r.stable);
+      pill.appendChild(dot);
+      pill.appendChild(document.createTextNode(r.stable ? 'Stable' : 'Experimental'));
+
+      var statusCell = el('td');
+      statusCell.appendChild(pill);
+
+      tbody.appendChild(
+        el('tr', {}, [
+          el('td', { text: r.project }),
+          el('td', { text: r.version }),
+          statusCell,
+          el('td', { class: 'num', text: fmtFull(r.count) }),
+          el('td', { class: 'num', text: r.share.toFixed(1) + '%' }),
+        ])
+      );
+    });
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    return wrap;
+  }
+
+  function renderFullTable() {
+    var container = document.getElementById('full-table');
+    container.innerHTML = '';
+    container.appendChild(buildVersionsTable(collectAllRows()));
+  }
+
+  function renderEcosystem() {
+    var container = document.getElementById('ecosystem-list');
+    container.innerHTML = '';
+    if (!data.ecosystem) return;
+    var dateKey = latestDateKey(data.ecosystem);
+    if (!dateKey) return;
+    var entries = data.ecosystem[dateKey];
+    var maxVal = Math.max.apply(null, entries.map(function (e) { return e.count; }));
+
+    entries.forEach(function (e) {
+      var row = el('div', { class: 'eco-bar-row' });
+      row.appendChild(el('div', { class: 'name', text: e.name }));
+      var track = el('div', { class: 'eco-bar-track' });
+      var fill = el('div', { class: 'eco-bar-fill' });
+      fill.style.width = Math.max(2, (e.count / maxVal) * 100) + '%';
+      track.appendChild(fill);
+      row.appendChild(track);
+      row.appendChild(el('div', { class: 'count', text: fmtFull(e.count) }));
+      container.appendChild(row);
+    });
+
+    var note = el('div', { class: 'panel-note', text: 'Snapshot: ' + dateKey });
+    container.appendChild(note);
+  }
+
+  function renderMeta() {
+    var target = document.getElementById('last-updated');
+    if (data.meta && data.meta.lastUpdated) {
+      target.textContent = 'Last updated ' + new Date(data.meta.lastUpdated).toLocaleString('en-US', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      });
+    } else {
+      target.textContent = '';
+    }
+  }
+
+  function renderAll() {
+    syncFilterChips();
+    renderStatRow();
+    renderTotalsChart();
+    renderBreakdownGrid();
+    renderAdoptionGrid();
+    renderFullTable();
+    renderEcosystem();
+  }
+
+  function init() {
+    renderFilters();
+    loadAll()
+      .then(function () {
+        renderMeta();
+        renderAll();
+      })
+      .catch(function (err) {
+        console.error(err);
+        document.querySelector('.wrap').appendChild(el('div', { class: 'empty-state', text: 'Failed to load data: ' + err.message }));
+      });
+
+    if (window.matchMedia) {
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
+        if (data.meta) renderAll();
+      });
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', init);
+})();

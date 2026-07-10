@@ -1,0 +1,52 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Check script syntax
+        run: |
+          node --check scripts/collect.mjs
+          node --check docs/app.js
+
+      - name: Validate data files
+        run: |
+          node - <<'EOF'
+          const { readFileSync, readdirSync } = require('node:fs');
+          const files = [
+            'docs/data/meta.json',
+            'docs/data/ecosystem.json',
+            ...readdirSync('docs/data/history').map(f => 'docs/data/history/' + f),
+          ];
+          for (const file of files) {
+            const parsed = JSON.parse(readFileSync(file, 'utf8'));
+            if (file.includes('history/')) {
+              if (!Array.isArray(parsed.servers)) throw new Error(file + ': servers is not an array');
+              if (typeof parsed.versions !== 'object') throw new Error(file + ': versions is not an object');
+              for (const [date, rows] of Object.entries(parsed.versions)) {
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error(file + ': bad date key ' + date);
+                for (const row of rows) {
+                  if (typeof row.version !== 'string' || typeof row.count !== 'number' || typeof row.stable !== 'boolean') {
+                    throw new Error(file + ': malformed row in ' + date);
+                  }
+                }
+              }
+            }
+            console.log('ok', file);
+          }
+          EOF
