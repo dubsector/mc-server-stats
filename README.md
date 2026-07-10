@@ -47,7 +47,7 @@ A version counts as stable when the newest build for it sits in a stable channel
 - bStats only exposes per-version breakdowns as a current snapshot. There is no public history for them, so the per-version trend charts only accumulate from the day this collector first ran. They cannot be backfilled.
 - The total-servers line does have full history from bStats, which is why that chart is populated from day one.
 - Purpur's stability tag is a best-effort guess from the version string, not an authoritative channel like the other three projects have.
-- If a build-channel API is unreachable during collection, stability for that project falls back to the version-string heuristic for that day.
+- If a project's build-channel API is unreachable during collection, the run fails and retries the next day rather than recording guessed stability values. Individual failed build lookups within a working API fall back to the version-string heuristic.
 - The ecosystem panel is a current snapshot only. Some long-tail entries are dead forks that a few servers still run.
 
 ## Running locally
