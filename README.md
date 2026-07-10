@@ -7,10 +7,10 @@ Live site: https://dubsector.github.io/mc-server-stats/
 ## What it shows
 
 - Total servers over time for each project, with history going back years
-- Current version breakdown per project, colored by build stability
+- Current version breakdown per project, colored by build stability, as bars or a pie
 - Per-version adoption trends, so you can watch a new release climb while the old one declines
 - A sortable table of every version with counts and share
-- Ecosystem-wide market share for every server software bStats knows about
+- Ecosystem-wide market share for every server software bStats knows about, as bars or a pie
 
 Filters for software, stability, time range, and metric (absolute count or percent share), plus a version search box. Everything renders from committed JSON with no external requests at page load, so the site works even if your network blocks bstats.org.
 

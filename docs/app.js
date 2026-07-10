@@ -24,6 +24,21 @@
     metric: 'count',
     search: '',
     sort: { col: 'count', dir: 'desc' },
+    breakdownView: 'bars',
+    ecosystemView: 'bars',
+  };
+
+  // Fixed name-to-color map so ecosystem pie slices keep their color as ranks shift.
+  // Anything unmapped folds into the gray "Other" slice.
+  var ECO_COLOR_VARS = {
+    Paper: '--series-paper',
+    Purpur: '--series-purpur',
+    Folia: '--series-folia',
+    Leaf: '--series-leaf',
+    Spigot: '--eco-violet',
+    UniverseSpigot: '--eco-red',
+    Arclight: '--eco-magenta',
+    Mohist: '--eco-orange',
   };
 
   var data = { meta: null, projects: {}, ecosystem: null };
@@ -370,6 +385,129 @@
     container.appendChild(tooltip);
   }
 
+  // ---------------------------------------------------------------- chart: donut
+
+  // Slices within one stability family get a monotone lightness ladder so neighbors
+  // stay distinguishable while the green/amber meaning holds. Rank 0 is the largest.
+  function stabilityLadderColor(stable, rank) {
+    var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (stable) {
+      var gl = dark ? 58 - rank * 6 : 34 + rank * 7;
+      return 'hsl(120 55% ' + gl + '%)';
+    }
+    var al = dark ? 60 - rank * 6 : 42 + rank * 6;
+    return 'hsl(38 85% ' + al + '%)';
+  }
+
+  function donutArcPath(cx, cy, rOuter, rInner, a0, a1) {
+    var large = a1 - a0 > Math.PI ? 1 : 0;
+    var x0o = cx + rOuter * Math.cos(a0), y0o = cy + rOuter * Math.sin(a0);
+    var x1o = cx + rOuter * Math.cos(a1), y1o = cy + rOuter * Math.sin(a1);
+    var x0i = cx + rInner * Math.cos(a1), y0i = cy + rInner * Math.sin(a1);
+    var x1i = cx + rInner * Math.cos(a0), y1i = cy + rInner * Math.sin(a0);
+    return (
+      'M' + x0o.toFixed(2) + ',' + y0o.toFixed(2) +
+      ' A' + rOuter + ',' + rOuter + ' 0 ' + large + ' 1 ' + x1o.toFixed(2) + ',' + y1o.toFixed(2) +
+      ' L' + x0i.toFixed(2) + ',' + y0i.toFixed(2) +
+      ' A' + rInner + ',' + rInner + ' 0 ' + large + ' 0 ' + x1i.toFixed(2) + ',' + y1i.toFixed(2) +
+      ' Z'
+    );
+  }
+
+  // slices: [{ name, count, color, dim, tooltipRows: [[label, value]] }]
+  function renderDonut(container, slices, opts) {
+    opts = opts || {};
+    container.innerHTML = '';
+    container.classList.add('chart-pos');
+
+    if (!slices.length) {
+      container.appendChild(el('div', { class: 'panel-note', text: 'No data matches the current filters.' }));
+      return;
+    }
+
+    var size = opts.size || 240;
+    var labelPad = 96;
+    var W = size + labelPad * 2;
+    var H = size + 20;
+    var cx = W / 2, cy = H / 2;
+    var rOuter = size / 2 - 6;
+    var rInner = rOuter * 0.62;
+    var total = slices.reduce(function (sum, s) { return sum + s.count; }, 0);
+    if (!total) {
+      container.appendChild(el('div', { class: 'panel-note', text: 'No data matches the current filters.' }));
+      return;
+    }
+
+    var root = svgEl('svg', { class: 'chart', viewBox: '0 0 ' + W + ' ' + H });
+    var tooltip = el('div', { class: 'chart-tooltip' });
+    var surface = cssVar('--surface-1');
+
+    function attachHover(target, s) {
+      target.addEventListener('pointerenter', function () {
+        tooltip.innerHTML = '';
+        tooltip.appendChild(el('div', { class: 'tt-title', text: s.name }));
+        s.tooltipRows.forEach(function (pair) {
+          var row = el('div', { class: 'tt-row' });
+          row.appendChild(el('span', { class: 'tt-key', text: pair[0] }));
+          row.appendChild(el('span', { class: 'tt-value', text: pair[1] }));
+          tooltip.appendChild(row);
+        });
+        tooltip.classList.add('visible');
+      });
+      target.addEventListener('pointermove', function (evt) { positionTooltip(evt, root, tooltip); });
+      target.addEventListener('pointerleave', function () { tooltip.classList.remove('visible'); });
+    }
+
+    if (slices.length === 1) {
+      var only = slices[0];
+      var ring = svgEl('circle', {
+        cx: cx, cy: cy, r: (rOuter + rInner) / 2,
+        fill: 'none', stroke: only.color, 'stroke-width': rOuter - rInner,
+        opacity: only.dim ? 0.3 : 1,
+      });
+      attachHover(ring, only);
+      root.appendChild(ring);
+    } else {
+      var angle = -Math.PI / 2;
+      slices.forEach(function (s) {
+        var span = (s.count / total) * Math.PI * 2;
+        var path = svgEl('path', {
+          d: donutArcPath(cx, cy, rOuter, rInner, angle, angle + span),
+          fill: s.color, stroke: surface, 'stroke-width': 2, 'stroke-linejoin': 'round',
+          opacity: s.dim ? 0.3 : 1,
+        });
+        attachHover(path, s);
+        root.appendChild(path);
+
+        var frac = s.count / total;
+        if (frac >= 0.05) {
+          var mid = angle + span / 2;
+          var lx = cx + (rOuter + 10) * Math.cos(mid);
+          var ly = cy + (rOuter + 10) * Math.sin(mid);
+          var onRight = Math.cos(mid) >= 0;
+          var label = svgEl('text', {
+            x: lx, y: ly + 3,
+            class: s.dim ? 'data-label' : 'data-label strong',
+            'text-anchor': onRight ? 'start' : 'end',
+          });
+          label.textContent = s.name + ' ' + (frac * 100).toFixed(1) + '%';
+          root.appendChild(label);
+        }
+        angle += span;
+      });
+    }
+
+    var centerValue = svgEl('text', { x: cx, y: cy, class: 'donut-center-value', 'text-anchor': 'middle' });
+    centerValue.textContent = fmtCompact(total);
+    root.appendChild(centerValue);
+    var centerCaption = svgEl('text', { x: cx, y: cy + 18, class: 'donut-center-caption', 'text-anchor': 'middle' });
+    centerCaption.textContent = opts.caption || 'servers';
+    root.appendChild(centerCaption);
+
+    container.appendChild(root);
+    container.appendChild(tooltip);
+  }
+
   function positionTooltip(evt, root, tooltip) {
     var rect = root.getBoundingClientRect();
     var x = evt.clientX - rect.left;
@@ -504,6 +642,17 @@
       renderAll();
     });
 
+    document.querySelectorAll('.view-switch').forEach(function (group) {
+      var target = group.dataset.viewTarget;
+      group.querySelectorAll('[data-view]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          if (target === 'breakdown') state.breakdownView = btn.dataset.view;
+          else state.ecosystemView = btn.dataset.view;
+          renderAll();
+        });
+      });
+    });
+
     document.querySelectorAll('[data-toggle-table]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var key = btn.dataset.toggleTable;
@@ -539,6 +688,12 @@
     });
     document.querySelectorAll('[data-metric]').forEach(function (chip) {
       chip.setAttribute('aria-pressed', chip.dataset.metric === state.metric ? 'true' : 'false');
+    });
+    document.querySelectorAll('.view-switch').forEach(function (group) {
+      var active = group.dataset.viewTarget === 'breakdown' ? state.breakdownView : state.ecosystemView;
+      group.querySelectorAll('[data-view]').forEach(function (btn) {
+        btn.setAttribute('aria-pressed', btn.dataset.view === active ? 'true' : 'false');
+      });
     });
   }
 
@@ -612,6 +767,43 @@
     return { rows: rows, date: dateKey, total: total };
   }
 
+  // Top versions as donut slices, everything smaller folded into a gray "Other".
+  // Expects rows sorted by count descending.
+  function versionSlices(rows) {
+    var top = rows.slice(0, 6);
+    var rest = rows.slice(6);
+    var stableRank = 0, expRank = 0;
+    var slices = top.map(function (r) {
+      return {
+        name: r.version,
+        count: r.count,
+        color: stabilityLadderColor(r.stable, r.stable ? stableRank++ : expRank++),
+        dim: !!state.search && !matchesSearch(r.version),
+        tooltipRows: [
+          ['Status', r.stable ? 'Stable' : 'Experimental'],
+          ['Servers', fmtFull(r.count)],
+          ['Share', r.share.toFixed(1) + '%'],
+        ],
+      };
+    });
+    if (rest.length) {
+      var otherCount = rest.reduce(function (sum, r) { return sum + r.count; }, 0);
+      var otherShare = rest.reduce(function (sum, r) { return sum + r.share; }, 0);
+      slices.push({
+        name: 'Other (' + rest.length + ')',
+        count: otherCount,
+        color: cssVar('--text-muted'),
+        dim: !!state.search,
+        tooltipRows: [
+          ['Versions', String(rest.length)],
+          ['Servers', fmtFull(otherCount)],
+          ['Share', otherShare.toFixed(1) + '%'],
+        ],
+      });
+    }
+    return slices;
+  }
+
   function renderBreakdownGrid() {
     var grid = document.getElementById('breakdown-grid');
     grid.innerHTML = '';
@@ -639,9 +831,13 @@
 
       var chartHolder = el('div');
       panel.appendChild(chartHolder);
-      renderBarPanel(chartHolder, shown, { metric: state.metric });
+      if (state.breakdownView === 'pie') {
+        renderDonut(chartHolder, versionSlices(filtered), { caption: p.name + ' servers' });
+      } else {
+        renderBarPanel(chartHolder, shown, { metric: state.metric });
+      }
 
-      if (filtered.length > shown.length) {
+      if (state.breakdownView !== 'pie' && filtered.length > shown.length) {
         panel.appendChild(el('div', { class: 'panel-note', text: '+' + (filtered.length - shown.length) + ' more in the table below' }));
       }
       if (snapshot.date) {
@@ -817,22 +1013,72 @@
     var dateKey = latestDateKey(data.ecosystem);
     if (!dateKey) return;
     var entries = data.ecosystem[dateKey];
-    var maxVal = Math.max.apply(null, entries.map(function (e) { return e.count; }));
 
-    entries.forEach(function (e) {
-      var row = el('div', { class: 'eco-bar-row' });
-      row.appendChild(el('div', { class: 'name', text: e.name }));
-      var track = el('div', { class: 'eco-bar-track' });
-      var fill = el('div', { class: 'eco-bar-fill' });
-      fill.style.width = Math.max(2, (e.count / maxVal) * 100) + '%';
-      track.appendChild(fill);
-      row.appendChild(track);
-      row.appendChild(el('div', { class: 'count', text: fmtFull(e.count) }));
-      container.appendChild(row);
-    });
+    if (state.ecosystemView === 'pie') {
+      renderEcosystemDonut(container, entries);
+    } else {
+      var maxVal = Math.max.apply(null, entries.map(function (e) { return e.count; }));
+      entries.forEach(function (e) {
+        var row = el('div', { class: 'eco-bar-row' });
+        row.appendChild(el('div', { class: 'name', text: e.name }));
+        var track = el('div', { class: 'eco-bar-track' });
+        var fill = el('div', { class: 'eco-bar-fill' });
+        fill.style.width = Math.max(2, (e.count / maxVal) * 100) + '%';
+        track.appendChild(fill);
+        row.appendChild(track);
+        row.appendChild(el('div', { class: 'count', text: fmtFull(e.count) }));
+        container.appendChild(row);
+      });
+    }
 
     var note = el('div', { class: 'panel-note', text: 'Snapshot: ' + dateKey });
     container.appendChild(note);
+  }
+
+  // Named forks keep their fixed colors; unmapped ones merge into the gray "Other"
+  // slice, since a pie cannot give a dozen small slices distinct readable hues.
+  function renderEcosystemDonut(container, entries) {
+    var total = entries.reduce(function (sum, e) { return sum + e.count; }, 0);
+    var named = [];
+    var otherCount = 0;
+    var otherNames = [];
+    entries.forEach(function (e) {
+      if (ECO_COLOR_VARS[e.name]) {
+        named.push(e);
+      } else {
+        otherCount += e.count;
+        otherNames.push(e.name);
+      }
+    });
+    named.sort(function (a, b) { return b.count - a.count; });
+
+    var slices = named.map(function (e) {
+      return {
+        name: e.name,
+        count: e.count,
+        color: cssVar(ECO_COLOR_VARS[e.name]),
+        dim: false,
+        tooltipRows: [
+          ['Servers', fmtFull(e.count)],
+          ['Share', ((e.count / total) * 100).toFixed(1) + '%'],
+        ],
+      };
+    });
+    if (otherCount > 0) {
+      slices.push({
+        name: 'Other',
+        count: otherCount,
+        color: cssVar('--text-muted'),
+        dim: false,
+        tooltipRows: [
+          ['Includes', otherNames.slice(0, 5).join(', ') + (otherNames.length > 5 ? ', more' : '')],
+          ['Servers', fmtFull(otherCount)],
+          ['Share', ((otherCount / total) * 100).toFixed(1) + '%'],
+        ],
+      });
+    }
+    slices.sort(function (a, b) { return b.count - a.count; });
+    renderDonut(container, slices, { size: 280, caption: 'servers total' });
   }
 
   function renderMeta() {
