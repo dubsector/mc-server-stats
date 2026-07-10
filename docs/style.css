@@ -580,15 +580,58 @@ table.data-table th.num {
 
 .site-footer {
   margin-top: 40px;
-  padding-top: 20px;
+  padding-top: 24px;
   border-top: 1px solid var(--border);
   font-size: 12.5px;
   color: var(--text-muted);
-  line-height: 1.7;
+  line-height: 1.6;
 }
 
-.site-footer p {
+.footer-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  margin-bottom: 20px;
+}
+
+.site-footer h3 {
   margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.site-footer ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.site-footer li {
+  padding: 3px 0;
+}
+
+.footer-bottom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.footer-bottom span {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .footer-cols {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
 }
 
 .empty-state {
