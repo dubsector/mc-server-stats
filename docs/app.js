@@ -70,8 +70,11 @@
     return String(Math.round(n));
   }
 
+  // All data is keyed by UTC day, so dates must render in UTC too; the browser's
+  // local timezone would shift midnight-stamped points to the previous day for
+  // viewers west of UTC and contradict the "Snapshot: YYYY-MM-DD" captions.
   function formatDate(ts, withYear) {
-    var opts = { month: 'short', day: 'numeric' };
+    var opts = { month: 'short', day: 'numeric', timeZone: 'UTC' };
     if (withYear) opts.year = 'numeric';
     return new Date(ts).toLocaleDateString('en-US', opts);
   }
@@ -1109,7 +1112,8 @@
       target.textContent = 'Last updated ' + new Date(data.meta.lastUpdated).toLocaleString('en-US', {
         dateStyle: 'medium',
         timeStyle: 'short',
-      });
+        timeZone: 'UTC',
+      }) + ' UTC';
     } else {
       target.textContent = '';
     }
