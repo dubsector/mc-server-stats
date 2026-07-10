@@ -14,6 +14,11 @@
   --series-purpur: #eda100;
   --series-leaf: #008300;
 
+  --eco-violet: #4a3aa7;
+  --eco-red: #e34948;
+  --eco-magenta: #e87ba4;
+  --eco-orange: #eb6834;
+
   --status-good: #0ca30c;
   --status-warning: #fab219;
 
@@ -43,6 +48,11 @@
     --series-folia: #199e70;
     --series-purpur: #c98500;
     --series-leaf: #008300;
+
+    --eco-violet: #9085e9;
+    --eco-red: #e66767;
+    --eco-magenta: #d55181;
+    --eco-orange: #d95926;
 
     --seq-300: #5598e7;
     --seq-450: #2a78d6;
@@ -269,6 +279,37 @@ a {
 
 .table-toggle:hover {
   background: var(--border);
+}
+
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.view-switch {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.view-switch .chip {
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+/* Donut */
+
+.donut-center-value {
+  fill: var(--text-primary);
+  font-size: 26px;
+  font-weight: 700;
+  font-family: var(--font-sans);
+}
+
+.donut-center-caption {
+  fill: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--font-sans);
 }
 
 /* Legend */

@@ -58,7 +58,13 @@
           <h2>Current version breakdown</h2>
           <div class="subtitle">Today's snapshot per project, colored by build stability.</div>
         </div>
-        <button class="table-toggle" data-toggle-table="breakdown">Table view</button>
+        <div class="head-actions">
+          <div class="view-switch" role="group" aria-label="Chart type" data-view-target="breakdown">
+            <button class="chip" data-view="bars" aria-pressed="true">Bars</button>
+            <button class="chip" data-view="pie" aria-pressed="false">Pie</button>
+          </div>
+          <button class="table-toggle" data-toggle-table="breakdown">Table view</button>
+        </div>
       </div>
       <div class="legend">
         <span class="legend-item"><span class="legend-swatch rect" style="background:var(--status-good)"></span>Stable</span>
@@ -97,6 +103,12 @@
         <div>
           <h2>Ecosystem-wide market share</h2>
           <div class="subtitle">Every server-software name bStats sees, not just the four tracked above — current snapshot only, top 12 plus everything smaller folded into "Other".</div>
+        </div>
+        <div class="head-actions">
+          <div class="view-switch" role="group" aria-label="Chart type" data-view-target="ecosystem">
+            <button class="chip" data-view="bars" aria-pressed="true">Bars</button>
+            <button class="chip" data-view="pie" aria-pressed="false">Pie</button>
+          </div>
         </div>
       </div>
       <div id="ecosystem-list"></div>
