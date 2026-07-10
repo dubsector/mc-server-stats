@@ -26,7 +26,10 @@
     sort: { col: 'count', dir: 'desc' },
     breakdownView: 'bars',
     ecosystemView: 'bars',
+    tableExpanded: false,
   };
+
+  var TABLE_COLLAPSED_ROWS = 15;
 
   // Fixed name-to-color map so ecosystem pie slices keep their color as ranks shift.
   // Anything unmapped folds into the gray "Other" slice.
@@ -665,6 +668,8 @@
         tableEl.classList.toggle('hidden', showingTable);
         chartEl.classList.toggle('hidden', !showingTable);
         if (legendId) document.getElementById(legendId).classList.toggle('hidden', !showingTable);
+        var viewSwitch = btn.closest('.card').querySelector('.view-switch');
+        if (viewSwitch) viewSwitch.classList.toggle('hidden', !showingTable);
         btn.textContent = showingTable ? 'Table view' : 'Chart view';
       });
     });
@@ -936,7 +941,8 @@
     return rows;
   }
 
-  function buildVersionsTable(rows) {
+  function buildVersionsTable(rows, opts) {
+    opts = opts || {};
     var wrap = el('div');
     if (!rows.length) {
       wrap.appendChild(el('div', { class: 'empty-state', text: 'No versions match the current filters.' }));
@@ -974,8 +980,11 @@
     });
     table.appendChild(el('thead', {}, [headRow]));
 
+    var collapsed = opts.collapsible && !state.tableExpanded && sorted.length > TABLE_COLLAPSED_ROWS;
+    var visible = collapsed ? sorted.slice(0, TABLE_COLLAPSED_ROWS) : sorted;
+
     var tbody = el('tbody');
-    sorted.forEach(function (r) {
+    visible.forEach(function (r) {
       var pill = el('span', { class: 'status-pill' });
       var dot = el('span', { class: 'dot' });
       dot.style.background = statusColor(r.stable);
@@ -997,13 +1006,26 @@
     });
     table.appendChild(tbody);
     wrap.appendChild(table);
+
+    if (opts.collapsible && sorted.length > TABLE_COLLAPSED_ROWS) {
+      wrap.appendChild(
+        el('button', {
+          class: 'table-toggle show-more',
+          text: collapsed ? 'Show all ' + sorted.length + ' versions' : 'Show fewer',
+          onclick: function () {
+            state.tableExpanded = !state.tableExpanded;
+            renderFullTable();
+          },
+        })
+      );
+    }
     return wrap;
   }
 
   function renderFullTable() {
     var container = document.getElementById('full-table');
     container.innerHTML = '';
-    container.appendChild(buildVersionsTable(collectAllRows()));
+    container.appendChild(buildVersionsTable(collectAllRows(), { collapsible: true }));
   }
 
   function renderEcosystem() {
