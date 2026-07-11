@@ -19,6 +19,7 @@
     </header>
 
     <section class="stat-row" id="stat-row" aria-label="Current server counts"></section>
+    <div class="stat-note">Tile counts come from the global bStats server-software chart, which counts each server once. "Incl. forks" is the project's own bStats counter, which downstream forks also report to.</div>
 
     <div class="filter-row" role="group" aria-label="Filters">
       <div class="filter-group" id="filter-projects" aria-label="Software">
@@ -30,9 +31,6 @@
       <div class="filter-group" id="filter-range" aria-label="Time range">
         <span class="group-label">Range</span>
       </div>
-      <div class="filter-group" id="filter-metric" aria-label="Metric">
-        <span class="group-label">Metric</span>
-      </div>
       <div class="filter-group">
         <span class="group-label">Version</span>
         <input class="search-input" id="version-search" type="text" placeholder="e.g. 26.2" autocomplete="off" />
@@ -43,9 +41,15 @@
       <div class="card-head">
         <div>
           <h2>Total servers over time</h2>
-          <div class="subtitle">Real bStats history — populated from day one, no accumulation needed.</div>
+          <div class="subtitle">"Each server once" accumulates daily from July 8, 2026. "Incl. forks" is each project's own bStats history, where downstream forks also count toward the upstream project.</div>
         </div>
-        <button class="table-toggle" data-toggle-table="totals">Table view</button>
+        <div class="head-actions">
+          <div class="view-switch" role="group" aria-label="Counting method" data-view-target="totals">
+            <button class="chip" data-view="exclusive" aria-pressed="true">Each server once</button>
+            <button class="chip" data-view="family" aria-pressed="false">Incl. forks</button>
+          </div>
+          <button class="table-toggle" data-toggle-table="totals">Table view</button>
+        </div>
       </div>
       <div id="legend-totals" class="legend"></div>
       <div id="chart-totals" class="chart-pos"></div>
@@ -56,9 +60,13 @@
       <div class="card-head">
         <div>
           <h2>Current version breakdown</h2>
-          <div class="subtitle">Today's snapshot per project, colored by build stability.</div>
+          <div class="subtitle">Today's snapshot per project, colored by build stability. Counts include downstream forks.</div>
         </div>
         <div class="head-actions">
+          <div class="view-switch" role="group" aria-label="Metric">
+            <button class="chip" data-metric="count" aria-pressed="true">Count</button>
+            <button class="chip" data-metric="share" aria-pressed="false">% Share</button>
+          </div>
           <div class="view-switch" role="group" aria-label="Chart type" data-view-target="breakdown">
             <button class="chip" data-view="bars" aria-pressed="true">Bars</button>
             <button class="chip" data-view="pie" aria-pressed="false">Pie</button>
@@ -79,6 +87,12 @@
         <div>
           <h2>Version adoption over time</h2>
           <div class="subtitle">Per-version trend since tracking began — watch new versions climb and old ones decline.</div>
+        </div>
+        <div class="head-actions">
+          <div class="view-switch" role="group" aria-label="Metric">
+            <button class="chip" data-metric="count" aria-pressed="true">Count</button>
+            <button class="chip" data-metric="share" aria-pressed="false">% Share</button>
+          </div>
         </div>
       </div>
       <div class="legend">
@@ -129,6 +143,7 @@
           <h3>Notes</h3>
           <ul>
             <li>Data refreshes once a day, shortly after midnight UTC</li>
+            <li>Per-project data (version breakdowns, history) comes from each project's own bStats page, which downstream forks also report to, so those counts overlap across projects. The stat tiles and the ecosystem panel use the global server-software chart instead, which counts every server exactly once</li>
             <li>Per-version history accumulates from July 10, 2026. bStats only exposes current snapshots, so earlier dates cannot be backfilled</li>
             <li>The ecosystem panel is a current snapshot without version-level detail</li>
           </ul>

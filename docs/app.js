@@ -26,6 +26,7 @@
     sort: { col: 'count', dir: 'desc' },
     breakdownView: 'bars',
     ecosystemView: 'bars',
+    totalsView: 'exclusive',
     tableExpanded: false,
   };
 
@@ -142,6 +143,19 @@
     var keys = Object.keys(versionsMap || {});
     if (!keys.length) return null;
     return keys.sort()[keys.length - 1];
+  }
+
+  // The global serverSoftware chart counts each server under exactly one software
+  // name. The projects' own bStats pages also receive pings from downstream forks
+  // (a Purpur server reports to both Purpur and Paper), so headline counts must
+  // come from here to avoid counting the same server twice.
+  function ecosystemSeries(name) {
+    var points = [];
+    Object.keys(data.ecosystem || {}).sort().forEach(function (dk) {
+      var entry = (data.ecosystem[dk] || []).filter(function (e) { return e.name === name; })[0];
+      if (entry) points.push([Date.parse(dk + 'T00:00:00Z'), entry.count]);
+    });
+    return points;
   }
 
   function rangeCutoff() {
@@ -502,7 +516,7 @@
             class: s.dim ? 'data-label' : 'data-label strong',
             'text-anchor': onRight ? 'start' : 'end',
           });
-          label.textContent = s.name + ' ' + (frac * 100).toFixed(1) + '%';
+          label.textContent = s.name + ' ' + (opts.metric === 'count' ? fmtCompact(s.count) : (frac * 100).toFixed(1) + '%');
           root.appendChild(label);
         }
         angle += span;
@@ -535,12 +549,12 @@
     var container = document.getElementById('stat-row');
     container.innerHTML = '';
     PROJECTS.forEach(function (p) {
-      var servers = (data.projects[p.key] || {}).servers || [];
-      var latest = servers.length ? servers[servers.length - 1][1] : null;
-      var weekAgoTs = servers.length ? servers[servers.length - 1][0] - 7 * 86400000 : null;
+      var points = ecosystemSeries(p.name);
+      var latest = points.length ? points[points.length - 1][1] : null;
+      var weekAgoTs = points.length ? points[points.length - 1][0] - 7 * 86400000 : null;
       var weekAgoPoint = null;
       if (weekAgoTs) {
-        servers.forEach(function (pt) {
+        points.forEach(function (pt) {
           if (pt[0] <= weekAgoTs) weekAgoPoint = pt;
         });
       }
@@ -563,10 +577,16 @@
         tile.appendChild(deltaEl);
       }
 
+      var servers = (data.projects[p.key] || {}).servers || [];
+      var familyLatest = servers.length ? servers[servers.length - 1][1] : null;
+      if (familyLatest != null) {
+        tile.appendChild(el('div', { class: 'panel-note', text: 'Incl. forks: ' + fmtFull(familyLatest) }));
+      }
+
       var sparkContainer = el('div', { class: 'sparkline' });
       tile.appendChild(sparkContainer);
       container.appendChild(tile);
-      renderSparkline(sparkContainer, servers.slice(-60), projectColor(p.key));
+      renderSparkline(sparkContainer, points.slice(-60), projectColor(p.key));
     });
   }
 
@@ -633,19 +653,11 @@
       rangeGroup.appendChild(chip);
     });
 
-    var metricGroup = document.getElementById('filter-metric');
-    [['count', 'Count'], ['share', '% Share']].forEach(function (pair) {
-      var chip = el('button', {
-        class: 'chip',
-        'aria-pressed': state.metric === pair[0] ? 'true' : 'false',
-        text: pair[1],
-        onclick: function () {
-          state.metric = pair[0];
-          renderAll();
-        },
+    document.querySelectorAll('[data-metric]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        state.metric = btn.dataset.metric;
+        renderAll();
       });
-      chip.dataset.metric = pair[0];
-      metricGroup.appendChild(chip);
     });
 
     var searchInput = document.getElementById('version-search');
@@ -659,6 +671,7 @@
       group.querySelectorAll('[data-view]').forEach(function (btn) {
         btn.addEventListener('click', function () {
           if (target === 'breakdown') state.breakdownView = btn.dataset.view;
+          else if (target === 'totals') state.totalsView = btn.dataset.view;
           else state.ecosystemView = btn.dataset.view;
           renderAll();
         });
@@ -677,8 +690,9 @@
         tableEl.classList.toggle('hidden', showingTable);
         chartEl.classList.toggle('hidden', !showingTable);
         if (legendId) document.getElementById(legendId).classList.toggle('hidden', !showingTable);
-        var viewSwitch = btn.closest('.card').querySelector('.view-switch');
-        if (viewSwitch) viewSwitch.classList.toggle('hidden', !showingTable);
+        btn.closest('.card').querySelectorAll('.view-switch').forEach(function (viewSwitch) {
+          viewSwitch.classList.toggle('hidden', !showingTable);
+        });
         btn.textContent = showingTable ? 'Table view' : 'Chart view';
       });
     });
@@ -704,7 +718,8 @@
       chip.setAttribute('aria-pressed', chip.dataset.metric === state.metric ? 'true' : 'false');
     });
     document.querySelectorAll('.view-switch').forEach(function (group) {
-      var active = group.dataset.viewTarget === 'breakdown' ? state.breakdownView : state.ecosystemView;
+      var target = group.dataset.viewTarget;
+      var active = target === 'breakdown' ? state.breakdownView : target === 'totals' ? state.totalsView : state.ecosystemView;
       group.querySelectorAll('[data-view]').forEach(function (btn) {
         btn.setAttribute('aria-pressed', btn.dataset.view === active ? 'true' : 'false');
       });
@@ -717,9 +732,10 @@
 
   function renderTotalsChart() {
     var cutoff = rangeCutoff();
+    var exclusive = state.totalsView === 'exclusive';
     var series = activeProjectList().map(function (p) {
-      var servers = (data.projects[p.key] || {}).servers || [];
-      var points = cutoff ? servers.filter(function (pt) { return pt[0] >= cutoff; }) : servers;
+      var all = exclusive ? ecosystemSeries(p.name) : (data.projects[p.key] || {}).servers || [];
+      var points = cutoff ? all.filter(function (pt) { return pt[0] >= cutoff; }) : all;
       return { key: p.key, name: p.name, color: projectColor(p.key), points: points };
     });
 
@@ -739,7 +755,13 @@
       legend.appendChild(item);
     });
 
-    renderLineChart(document.getElementById('chart-totals'), series, { emptyText: 'Select a project to see its history.' });
+    var chartContainer = document.getElementById('chart-totals');
+    renderLineChart(chartContainer, series, { emptyText: 'Select a project to see its history.' });
+    if (exclusive) {
+      chartContainer.appendChild(
+        el('div', { class: 'panel-note', text: 'Daily snapshots of the global server-software chart. bStats cannot backfill these, so the line grows one point per day.' })
+      );
+    }
 
     var tableContainer = document.getElementById('table-totals');
     tableContainer.innerHTML = '';
@@ -747,20 +769,22 @@
     var thead = el('thead', {}, [
       el('tr', {}, [
         el('th', { text: 'Project' }),
-        el('th', { class: 'num', text: 'Current servers' }),
-        el('th', { class: 'num', text: 'History points' }),
+        el('th', { class: 'num', text: 'Each server once' }),
+        el('th', { class: 'num', text: 'Incl. forks' }),
       ]),
     ]);
     table.appendChild(thead);
     var tbody = el('tbody');
     activeProjectList().forEach(function (p) {
+      var eco = ecosystemSeries(p.name);
+      var ecoLatest = eco.length ? eco[eco.length - 1][1] : null;
       var servers = (data.projects[p.key] || {}).servers || [];
       var latest = servers.length ? servers[servers.length - 1][1] : null;
       tbody.appendChild(
         el('tr', {}, [
           el('td', { text: p.name }),
+          el('td', { class: 'num', text: ecoLatest == null ? '—' : fmtFull(ecoLatest) }),
           el('td', { class: 'num', text: latest == null ? '—' : fmtFull(latest) }),
-          el('td', { class: 'num', text: String(servers.length) }),
         ])
       );
     });
@@ -846,7 +870,7 @@
       var chartHolder = el('div');
       panel.appendChild(chartHolder);
       if (state.breakdownView === 'pie') {
-        renderDonut(chartHolder, versionSlices(filtered), { caption: p.name + ' servers' });
+        renderDonut(chartHolder, versionSlices(filtered), { caption: p.name + ' servers', metric: state.metric });
       } else {
         renderBarPanel(chartHolder, shown, { metric: state.metric });
       }
