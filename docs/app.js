@@ -21,12 +21,14 @@
     activeProjects: new Set(PROJECTS.map(function (p) { return p.key; })),
     stability: 'all',
     range: '30d',
-    metric: 'count',
+    breakdownMetric: 'count',
+    adoptionMetric: 'count',
     search: '',
     sort: { col: 'count', dir: 'desc' },
     breakdownView: 'bars',
     ecosystemView: 'bars',
     totalsView: 'exclusive',
+    breakdownMode: 'exclusive',
     tableExpanded: false,
   };
 
@@ -158,6 +160,20 @@
     return points;
   }
 
+  // Per-version splits only ever exist in fork-inclusive form (bStats never breaks
+  // the exclusive serverSoftware count down by version), so the counting-method
+  // toggle on the breakdown card can only swap this one rolled-up total, while
+  // the bars/donut beneath it always show the fork-inclusive split.
+  // Exclusive is the default view, so it shows a bare number; only the
+  // fork-inclusive count carries a qualifier, to keep the panels uncluttered.
+  function projectHeadlineTotal(p, familyTotal, mode) {
+    if (mode === 'exclusive') {
+      var eco = ecosystemSeries(p.name);
+      return { value: eco.length ? eco[eco.length - 1][1] : null, label: '' };
+    }
+    return { value: familyTotal, label: ' (incl. forks)' };
+  }
+
   function rangeCutoff() {
     var r = RANGES.filter(function (x) { return x.key === state.range; })[0];
     if (!r || r.days == null) return null;
@@ -199,23 +215,63 @@
     var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
     if (minX === maxX) { minX -= 43200000; maxX += 43200000; }
 
-    var maxY = 0;
-    allPoints.forEach(function (p) { if (p[1] > maxY) maxY = p[1]; });
+    // A shared linear axis flattens smaller series to the baseline when one series is
+    // 100x+ larger (e.g. Paper vs Folia), making them indistinguishable from each other.
+    // Switch to a log axis once the spread is wide enough to matter; falls back to
+    // linear automatically once filters narrow the active series to a similar scale.
+    var maxY = 0, minPosY = Infinity;
+    allPoints.forEach(function (p) {
+      if (p[1] > maxY) maxY = p[1];
+      if (p[1] > 0 && p[1] < minPosY) minPosY = p[1];
+    });
     var niceY = niceCeil(maxY || 1);
+    var useLog = opts.yScale === 'log' && maxY > 0 && minPosY !== Infinity && maxY / minPosY >= 15;
+    var minLog, maxLog;
+    if (useLog) {
+      minLog = Math.floor(Math.log10(minPosY));
+      maxLog = Math.ceil(Math.log10(maxY));
+      if (minLog === maxLog) { minLog -= 1; maxLog += 1; }
+    }
 
     function xPos(ts) { return padL + ((ts - minX) / (maxX - minX)) * plotW; }
-    function yPos(v) { return padT + plotH - (v / niceY) * plotH; }
+    function yPos(v) {
+      if (useLog) {
+        if (v <= 0) return padT + plotH;
+        var frac = (Math.log10(v) - minLog) / (maxLog - minLog);
+        return padT + plotH - frac * plotH;
+      }
+      return padT + plotH - (v / niceY) * plotH;
+    }
+
+    // In share mode (suffix '%') values are 0-100 percentages: keep one decimal and
+    // show the unit on the axis and line labels, not just in the tooltip.
+    function fmtVal(v) {
+      if (opts.suffix) return Math.round(v * 10) / 10 + opts.suffix;
+      return fmtCompact(v);
+    }
 
     var root = svgEl('svg', { class: 'chart', viewBox: '0 0 ' + W + ' ' + H });
 
-    var steps = 4;
-    for (var i = 0; i <= steps; i++) {
-      var v = (niceY * i) / steps;
-      var y = yPos(v);
-      root.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: y, y2: y, class: i === 0 ? 'baseline' : 'gridline' }));
-      var t = svgEl('text', { x: padL - 8, y: y + 4, class: 'axis-label', 'text-anchor': 'end' });
-      t.textContent = fmtCompact(v);
-      root.appendChild(t);
+    if (useLog) {
+      root.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: yPos(0), y2: yPos(0), class: 'baseline' }));
+      for (var p10 = minLog; p10 <= maxLog; p10++) {
+        var gv = Math.pow(10, p10);
+        var gy = yPos(gv);
+        root.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: gy, y2: gy, class: 'gridline' }));
+        var gt = svgEl('text', { x: padL - 8, y: gy + 4, class: 'axis-label', 'text-anchor': 'end' });
+        gt.textContent = fmtVal(gv);
+        root.appendChild(gt);
+      }
+    } else {
+      var steps = 4;
+      for (var i = 0; i <= steps; i++) {
+        var v = (niceY * i) / steps;
+        var y = yPos(v);
+        root.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: y, y2: y, class: i === 0 ? 'baseline' : 'gridline' }));
+        var t = svgEl('text', { x: padL - 8, y: y + 4, class: 'axis-label', 'text-anchor': 'end' });
+        t.textContent = fmtVal(v);
+        root.appendChild(t);
+      }
     }
 
     var spansYears = maxX - minX > 300 * 86400000;
@@ -259,7 +315,7 @@
     }
     labelEntries.forEach(function (le) {
       var t = svgEl('text', { x: le.x + 8, y: le.y + 3, class: 'data-label strong' });
-      t.textContent = le.s.name + ' ' + fmtCompact(le.val);
+      t.textContent = le.s.name + ' ' + fmtVal(le.val);
       root.appendChild(t);
     });
 
@@ -653,10 +709,14 @@
       rangeGroup.appendChild(chip);
     });
 
-    document.querySelectorAll('[data-metric]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        state.metric = btn.dataset.metric;
-        renderAll();
+    document.querySelectorAll('[data-metric-target]').forEach(function (group) {
+      var target = group.dataset.metricTarget;
+      group.querySelectorAll('[data-metric]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          if (target === 'breakdown') state.breakdownMetric = btn.dataset.metric;
+          else state.adoptionMetric = btn.dataset.metric;
+          renderAll();
+        });
       });
     });
 
@@ -671,10 +731,19 @@
       group.querySelectorAll('[data-view]').forEach(function (btn) {
         btn.addEventListener('click', function () {
           if (target === 'breakdown') state.breakdownView = btn.dataset.view;
-          else if (target === 'totals') state.totalsView = btn.dataset.view;
           else state.ecosystemView = btn.dataset.view;
           renderAll();
         });
+      });
+    });
+
+    // Single flip button per card: shows "Incl. forks" in the default exclusive
+    // view and "Excl. forks" once flipped, so the label always names the way back.
+    document.querySelectorAll('[data-mode-flip]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (btn.dataset.modeFlip === 'totals') state.totalsView = state.totalsView === 'family' ? 'exclusive' : 'family';
+        else state.breakdownMode = state.breakdownMode === 'family' ? 'exclusive' : 'family';
+        renderAll();
       });
     });
 
@@ -714,15 +783,24 @@
     document.querySelectorAll('[data-range]').forEach(function (chip) {
       chip.setAttribute('aria-pressed', chip.dataset.range === state.range ? 'true' : 'false');
     });
-    document.querySelectorAll('[data-metric]').forEach(function (chip) {
-      chip.setAttribute('aria-pressed', chip.dataset.metric === state.metric ? 'true' : 'false');
+    document.querySelectorAll('[data-metric-target]').forEach(function (group) {
+      var active = group.dataset.metricTarget === 'breakdown' ? state.breakdownMetric : state.adoptionMetric;
+      group.querySelectorAll('[data-metric]').forEach(function (chip) {
+        chip.setAttribute('aria-pressed', chip.dataset.metric === active ? 'true' : 'false');
+      });
     });
     document.querySelectorAll('.view-switch').forEach(function (group) {
       var target = group.dataset.viewTarget;
-      var active = target === 'breakdown' ? state.breakdownView : target === 'totals' ? state.totalsView : state.ecosystemView;
+      if (!target) return;
+      var active = target === 'breakdown' ? state.breakdownView : state.ecosystemView;
       group.querySelectorAll('[data-view]').forEach(function (btn) {
         btn.setAttribute('aria-pressed', btn.dataset.view === active ? 'true' : 'false');
       });
+    });
+    document.querySelectorAll('[data-mode-flip]').forEach(function (btn) {
+      var mode = btn.dataset.modeFlip === 'totals' ? state.totalsView : state.breakdownMode;
+      btn.textContent = mode === 'family' ? 'Excl. forks' : 'Incl. forks';
+      btn.setAttribute('aria-pressed', mode === 'family' ? 'true' : 'false');
     });
   }
 
@@ -756,7 +834,7 @@
     });
 
     var chartContainer = document.getElementById('chart-totals');
-    renderLineChart(chartContainer, series, { emptyText: 'Select a project to see its history.' });
+    renderLineChart(chartContainer, series, { emptyText: 'Select a project to see its history.', yScale: 'log' });
     if (exclusive) {
       chartContainer.appendChild(
         el('div', { class: 'panel-note', text: 'Daily snapshots of the global server-software chart. bStats cannot backfill these, so the line grows one point per day.' })
@@ -769,7 +847,7 @@
     var thead = el('thead', {}, [
       el('tr', {}, [
         el('th', { text: 'Project' }),
-        el('th', { class: 'num', text: 'Each server once' }),
+        el('th', { class: 'num', text: 'Excl. forks' }),
         el('th', { class: 'num', text: 'Incl. forks' }),
       ]),
     ]);
@@ -867,12 +945,18 @@
       heading.appendChild(document.createTextNode(p.name));
       panel.appendChild(heading);
 
+      var headline = projectHeadlineTotal(p, snapshot.total, state.breakdownMode);
+      panel.appendChild(el('div', {
+        class: 'panel-total',
+        text: (headline.value == null ? '—' : fmtFull(headline.value)) + headline.label,
+      }));
+
       var chartHolder = el('div');
       panel.appendChild(chartHolder);
       if (state.breakdownView === 'pie') {
-        renderDonut(chartHolder, versionSlices(filtered), { caption: p.name + ' servers', metric: state.metric });
+        renderDonut(chartHolder, versionSlices(filtered), { caption: p.name, metric: state.breakdownMetric });
       } else {
-        renderBarPanel(chartHolder, shown, { metric: state.metric });
+        renderBarPanel(chartHolder, shown, { metric: state.breakdownMetric });
       }
 
       if (state.breakdownView !== 'pie' && filtered.length > shown.length) {
@@ -903,7 +987,7 @@
         var total = dayRows.reduce(function (s, r) { return s + r.count; }, 0);
         var entry = dayRows.filter(function (r) { return r.version === versionName; })[0];
         if (entry) {
-          points.push([ts, state.metric === 'share' ? (total ? (entry.count / total) * 100 : 0) : entry.count]);
+          points.push([ts, state.adoptionMetric === 'share' ? (total ? (entry.count / total) * 100 : 0) : entry.count]);
         }
       });
       var latestEntry = null;
@@ -952,24 +1036,20 @@
       });
       var chartHolder = el('div');
       panel.appendChild(chartHolder);
-      renderLineChart(chartHolder, series, { compact: true, height: 190, padR: 84, suffix: state.metric === 'share' ? '%' : '' });
+      renderLineChart(chartHolder, series, { compact: true, height: 210, padR: 84, suffix: state.adoptionMetric === 'share' ? '%' : '' });
 
       var dateKeys = Object.keys((data.projects[p.key] || {}).versions || {});
       if (dateKeys.length <= 1) {
-        panel.appendChild(el('div', { class: 'panel-note', text: 'Tracking since ' + (dateKeys[0] || 'today') + ' — trend fills in daily.' }));
+        panel.appendChild(el('div', { class: 'panel-note', text: 'Tracking since ' + (dateKeys[0] || 'today') + '. Trend fills in daily.' }));
       }
       grid.appendChild(panel);
     });
   }
 
   function collectAllRows() {
-    // Denominator for "% of all tracked" is always the four projects' combined
-    // totals, independent of active filters, so the number keeps one meaning.
-    var grandTotal = 0;
-    PROJECTS.forEach(function (p) {
-      grandTotal += projectVersionRows(p.key).total || 0;
-    });
-
+    // No "% of all tracked" column: its denominator would sum each project's own
+    // (fork-inclusive) total, and a Purpur server is already counted inside Paper's
+    // total, so a cross-project share here would double-count and understate.
     var rows = [];
     activeProjectList().forEach(function (p) {
       var snapshot = projectVersionRows(p.key);
@@ -982,7 +1062,6 @@
           stable: r.stable,
           count: r.count,
           share: r.share,
-          shareAll: grandTotal ? (r.count / grandTotal) * 100 : 0,
         });
       });
     });
@@ -1003,7 +1082,6 @@
       { key: 'stable', label: 'Status', numeric: false },
       { key: 'count', label: 'Servers', numeric: true },
       { key: 'share', label: '% of project', numeric: true },
-      { key: 'shareAll', label: '% of all tracked', numeric: true },
     ];
 
     var sorted = rows.slice().sort(function (a, b) {
@@ -1050,7 +1128,6 @@
           statusCell,
           el('td', { class: 'num', text: fmtFull(r.count) }),
           el('td', { class: 'num', text: fmtShare(r.share) }),
-          el('td', { class: 'num', text: fmtShare(r.shareAll) }),
         ])
       );
     });

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>mc-server-stats — Paper, Folia, Purpur &amp; Leaf version adoption</title>
+  <title>mc-server-stats: Paper, Folia, Purpur &amp; Leaf version adoption</title>
   <meta name="description" content="Tracks Minecraft server software version adoption across Paper, Folia, Purpur, and Leaf, split by stable and experimental builds." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -41,12 +41,11 @@
       <div class="card-head">
         <div>
           <h2>Total servers over time</h2>
-          <div class="subtitle">"Each server once" accumulates daily from July 8, 2026. "Incl. forks" is each project's own bStats history, where downstream forks also count toward the upstream project.</div>
+          <div class="subtitle">"Excl. forks" counts each server under one software name and accumulates daily from July 8, 2026. "Incl. forks" is each project's own bStats history, where downstream forks also count toward the upstream project.</div>
         </div>
         <div class="head-actions">
-          <div class="view-switch" role="group" aria-label="Counting method" data-view-target="totals">
-            <button class="chip" data-view="exclusive" aria-pressed="true">Each server once</button>
-            <button class="chip" data-view="family" aria-pressed="false">Incl. forks</button>
+          <div class="view-switch" role="group" aria-label="Counting method">
+            <button class="chip" data-mode-flip="totals" aria-pressed="false">Incl. forks</button>
           </div>
           <button class="table-toggle" data-toggle-table="totals">Table view</button>
         </div>
@@ -63,7 +62,10 @@
           <div class="subtitle">Today's snapshot per project, colored by build stability. Counts include downstream forks.</div>
         </div>
         <div class="head-actions">
-          <div class="view-switch" role="group" aria-label="Metric">
+          <div class="view-switch" role="group" aria-label="Counting method">
+            <button class="chip" data-mode-flip="breakdown" aria-pressed="false">Incl. forks</button>
+          </div>
+          <div class="view-switch" role="group" aria-label="Metric" data-metric-target="breakdown">
             <button class="chip" data-metric="count" aria-pressed="true">Count</button>
             <button class="chip" data-metric="share" aria-pressed="false">% Share</button>
           </div>
@@ -86,10 +88,10 @@
       <div class="card-head">
         <div>
           <h2>Version adoption over time</h2>
-          <div class="subtitle">Per-version trend since tracking began — watch new versions climb and old ones decline.</div>
+          <div class="subtitle">Per-version trend since tracking began. Watch new versions climb and old ones decline. Counts include downstream forks.</div>
         </div>
         <div class="head-actions">
-          <div class="view-switch" role="group" aria-label="Metric">
+          <div class="view-switch" role="group" aria-label="Metric" data-metric-target="adoption">
             <button class="chip" data-metric="count" aria-pressed="true">Count</button>
             <button class="chip" data-metric="share" aria-pressed="false">% Share</button>
           </div>
@@ -106,7 +108,7 @@
       <div class="card-head">
         <div>
           <h2>Ecosystem-wide market share</h2>
-          <div class="subtitle">Every server-software name bStats sees, not just the four tracked above — current snapshot only, top 12 plus everything smaller folded into "Other".</div>
+          <div class="subtitle">Every server-software name bStats sees, not just the four tracked above. Current snapshot only, top 12 plus everything smaller folded into "Other".</div>
         </div>
         <div class="head-actions">
           <div class="view-switch" role="group" aria-label="Chart type" data-view-target="ecosystem">
@@ -122,7 +124,7 @@
       <div class="card-head">
         <div>
           <h2>All versions</h2>
-          <div class="subtitle">Sortable — click a column header.</div>
+          <div class="subtitle">Sortable, click a column header. Server counts include downstream forks.</div>
         </div>
       </div>
       <div id="full-table"></div>
@@ -143,7 +145,9 @@
           <h3>Notes</h3>
           <ul>
             <li>Data refreshes once a day, shortly after midnight UTC</li>
-            <li>Per-project data (version breakdowns, history) comes from each project's own bStats page, which downstream forks also report to, so those counts overlap across projects. The stat tiles and the ecosystem panel use the global server-software chart instead, which counts every server exactly once</li>
+            <li>bStats reports two kinds of counts. The global server-software chart files each server under exactly one name. Each project's own bStats page also receives pings from downstream forks, so a Purpur server counts toward Paper's page too and those numbers overlap across projects</li>
+            <li>Everything defaults to the global count, where each server is counted once. The "Incl. forks" button on a card switches it to the project's own counter and back</li>
+            <li>Version breakdowns and per-version trends only exist on each project's own page, so those always include downstream forks. bStats does not publish a fork-free version split</li>
             <li>Per-version history accumulates from July 10, 2026. bStats only exposes current snapshots, so earlier dates cannot be backfilled</li>
             <li>The ecosystem panel is a current snapshot without version-level detail</li>
           </ul>
