@@ -210,11 +210,17 @@ async function collectEcosystem() {
   console.log('collecting ecosystem breakdown...');
   const data = await fetchBstatsPie(GLOBAL_SOFTWARE_PLUGIN_ID, GLOBAL_SOFTWARE_CHART);
   const sorted = [...data].sort((a, b) => b.y - a.y);
+  // The stat tiles read their headline counts from this file, so tracked projects
+  // must stay listed by name even if they ever fall out of the top N.
+  const trackedNames = new Set(Object.values(PROJECTS).map((p) => p.name));
   const top = sorted.slice(0, TOP_ECOSYSTEM_ENTRIES);
   const rest = sorted.slice(TOP_ECOSYSTEM_ENTRIES);
-  const otherCount = rest.reduce((sum, entry) => sum + entry.y, 0);
+  const promoted = rest.filter((entry) => trackedNames.has(entry.name));
+  const otherCount = rest
+    .filter((entry) => !trackedNames.has(entry.name))
+    .reduce((sum, entry) => sum + entry.y, 0);
 
-  const entries = top.map((entry) => ({ name: entry.name, count: entry.y }));
+  const entries = [...top, ...promoted].map((entry) => ({ name: entry.name, count: entry.y }));
   if (otherCount > 0) {
     entries.push({ name: 'Other', count: otherCount });
   }
