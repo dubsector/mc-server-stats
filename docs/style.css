@@ -367,6 +367,13 @@ a {
   gap: 16px;
 }
 
+/* Adoption panels are already per-project small multiples with only 4 lines each;
+   halving their width further (like the breakdown grid does) leaves too little room
+   to read the trend, so keep them full-width at every breakpoint. */
+#adoption-grid {
+  grid-template-columns: 1fr;
+}
+
 .multiple-panel {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -375,10 +382,17 @@ a {
 
 .multiple-panel h3 {
   font-size: 13px;
-  margin: 0 0 10px;
+  margin: 0 0 4px;
   display: flex;
   align-items: center;
   gap: 7px;
+}
+
+.panel-total {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin-bottom: 10px;
 }
 
 .panel-note {

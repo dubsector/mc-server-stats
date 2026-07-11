@@ -3,7 +3,7 @@
 // and docs/data/ecosystem.json. Safe to re-run multiple times on the same day (idempotent).
 //
 // Data lives under docs/ (not a top-level data/ dir) because GitHub Pages is configured to
-// serve main /docs — anything the site fetches at runtime has to live inside that folder.
+// serve main /docs, so anything the site fetches at runtime has to live inside that folder.
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -53,7 +53,7 @@ async function fetchBstatsLine(pluginId, chartId) {
   return fetchJson(`${BSTATS_BASE}/plugins/${pluginId}/charts/${chartId}/data?maxElements=200000`);
 }
 
-// 30-minute resolution is ~17k points/year per project — too heavy to commit and ship
+// 30-minute resolution is ~17k points/year per project, too heavy to commit and ship
 // to browsers. Keep the last value of each UTC day, stamped at that day's midnight so
 // timestamps align across projects (the totals tooltip matches series by exact ts).
 // bStats zero-pads every chart back to 2015 regardless of when the project first
