@@ -1,7 +1,11 @@
 # mc-server-stats
 
 [![Collect data](https://github.com/dubsector/mc-server-stats/actions/workflows/collect-data.yml/badge.svg)](https://github.com/dubsector/mc-server-stats/actions/workflows/collect-data.yml)
+[![Validate](https://github.com/dubsector/mc-server-stats/actions/workflows/validate.yml/badge.svg)](https://github.com/dubsector/mc-server-stats/actions/workflows/validate.yml)
+[![Zizmor](https://github.com/dubsector/mc-server-stats/actions/workflows/zizmor.yml/badge.svg)](https://github.com/dubsector/mc-server-stats/actions/workflows/zizmor.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/dubsector/mc-server-stats/badge)](https://scorecard.dev/viewer/?uri=github.com/dubsector/mc-server-stats)
+[![Security Policy](https://img.shields.io/badge/Security-Policy-green)](SECURITY.md)
+[![Dependabot](https://img.shields.io/badge/Dependabot-enabled-025E8C?logo=dependabot)](https://github.com/dubsector/mc-server-stats/network/updates)
 
 Tracks Minecraft server software version adoption across Paper, Folia, Purpur, and Leaf, split by stable and experimental builds. The site answers questions like "is 26.2 safe to run yet?" and "how fast are servers leaving 1.21.11?" with real numbers instead of guesswork.
 
