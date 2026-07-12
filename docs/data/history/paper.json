@@ -13470,7 +13470,11 @@
     ],
     [
       1783728000000,
-      153897
+      154252
+    ],
+    [
+      1783814400000,
+      153925
     ]
   ],
   "versions": {
@@ -14669,6 +14673,308 @@
       {
         "version": "1.21.11",
         "count": 51185,
+        "stable": true
+      }
+    ],
+    "2026-07-12": [
+      {
+        "version": "1.12.1",
+        "count": 1,
+        "stable": true
+      },
+      {
+        "version": "1.13.1",
+        "count": 1,
+        "stable": true
+      },
+      {
+        "version": "1.21.11 Release Candidate 2",
+        "count": 1,
+        "stable": false
+      },
+      {
+        "version": "1.21.11 Release Candidate 3",
+        "count": 1,
+        "stable": false
+      },
+      {
+        "version": "1.21.9 Release Candidate 1",
+        "count": 1,
+        "stable": false
+      },
+      {
+        "version": "26.1",
+        "count": 1,
+        "stable": true
+      },
+      {
+        "version": "1.13",
+        "count": 2,
+        "stable": true
+      },
+      {
+        "version": "1.14",
+        "count": 2,
+        "stable": true
+      },
+      {
+        "version": "1.14.1",
+        "count": 2,
+        "stable": true
+      },
+      {
+        "version": "1.14.2",
+        "count": 2,
+        "stable": true
+      },
+      {
+        "version": "1.14.3",
+        "count": 2,
+        "stable": true
+      },
+      {
+        "version": "1.15.1",
+        "count": 3,
+        "stable": true
+      },
+      {
+        "version": "1.15",
+        "count": 4,
+        "stable": true
+      },
+      {
+        "version": "1.21.9 Pre-Release 4",
+        "count": 4,
+        "stable": false
+      },
+      {
+        "version": "1.21.11 Pre-Release 5",
+        "count": 5,
+        "stable": false
+      },
+      {
+        "version": "1.21.9 Pre-Release 2",
+        "count": 5,
+        "stable": false
+      },
+      {
+        "version": "1.16.2",
+        "count": 6,
+        "stable": true
+      },
+      {
+        "version": "1.21.11 Pre-Release 4",
+        "count": 6,
+        "stable": false
+      },
+      {
+        "version": "1.21.11 Pre-Release 3",
+        "count": 7,
+        "stable": false
+      },
+      {
+        "version": "1.12",
+        "count": 9,
+        "stable": true
+      },
+      {
+        "version": "1.17",
+        "count": 14,
+        "stable": true
+      },
+      {
+        "version": "1.16.3",
+        "count": 19,
+        "stable": true
+      },
+      {
+        "version": "1.19.1",
+        "count": 19,
+        "stable": true
+      },
+      {
+        "version": "1.11.2",
+        "count": 22,
+        "stable": true
+      },
+      {
+        "version": "1.18",
+        "count": 25,
+        "stable": true
+      },
+      {
+        "version": "1.20.5",
+        "count": 27,
+        "stable": true
+      },
+      {
+        "version": "1.13.2",
+        "count": 35,
+        "stable": true
+      },
+      {
+        "version": "1.16.1",
+        "count": 56,
+        "stable": true
+      },
+      {
+        "version": "1.14.4",
+        "count": 70,
+        "stable": true
+      },
+      {
+        "version": "1.16.4",
+        "count": 87,
+        "stable": true
+      },
+      {
+        "version": "1.15.2",
+        "count": 100,
+        "stable": true
+      },
+      {
+        "version": "1.19",
+        "count": 123,
+        "stable": true
+      },
+      {
+        "version": "26.2 Release Candidate 2",
+        "count": 134,
+        "stable": false
+      },
+      {
+        "version": "1.20",
+        "count": 187,
+        "stable": true
+      },
+      {
+        "version": "1.18.1",
+        "count": 214,
+        "stable": true
+      },
+      {
+        "version": "1.19.3",
+        "count": 243,
+        "stable": true
+      },
+      {
+        "version": "1.17.1",
+        "count": 386,
+        "stable": true
+      },
+      {
+        "version": "1.19.2",
+        "count": 421,
+        "stable": true
+      },
+      {
+        "version": "1.18.2",
+        "count": 450,
+        "stable": true
+      },
+      {
+        "version": "1.20.2",
+        "count": 473,
+        "stable": true
+      },
+      {
+        "version": "1.19.4",
+        "count": 580,
+        "stable": true
+      },
+      {
+        "version": "1.21.3",
+        "count": 604,
+        "stable": true
+      },
+      {
+        "version": "1.21.9",
+        "count": 607,
+        "stable": true
+      },
+      {
+        "version": "1.21.6",
+        "count": 613,
+        "stable": true
+      },
+      {
+        "version": "1.21.7",
+        "count": 855,
+        "stable": true
+      },
+      {
+        "version": "1.20.6",
+        "count": 895,
+        "stable": true
+      },
+      {
+        "version": "1.16.5",
+        "count": 966,
+        "stable": true
+      },
+      {
+        "version": "1.12.2",
+        "count": 1187,
+        "stable": true
+      },
+      {
+        "version": "26.1.1",
+        "count": 1417,
+        "stable": false
+      },
+      {
+        "version": "1.21.5",
+        "count": 1509,
+        "stable": true
+      },
+      {
+        "version": "1.21",
+        "count": 1635,
+        "stable": true
+      },
+      {
+        "version": "1.20.4",
+        "count": 2069,
+        "stable": true
+      },
+      {
+        "version": "1.20.1",
+        "count": 2094,
+        "stable": true
+      },
+      {
+        "version": "1.21.1",
+        "count": 3460,
+        "stable": true
+      },
+      {
+        "version": "1.21.8",
+        "count": 6082,
+        "stable": true
+      },
+      {
+        "version": "1.21.4",
+        "count": 7159,
+        "stable": true
+      },
+      {
+        "version": "1.21.10",
+        "count": 8239,
+        "stable": true
+      },
+      {
+        "version": "26.2",
+        "count": 20323,
+        "stable": false
+      },
+      {
+        "version": "26.1.2",
+        "count": 39623,
+        "stable": true
+      },
+      {
+        "version": "1.21.11",
+        "count": 50838,
         "stable": true
       }
     ]
