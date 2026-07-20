@@ -646,5 +646,59 @@
       "name": "Other",
       "count": 1595
     }
+  ],
+  "2026-07-20": [
+    {
+      "name": "Paper",
+      "count": 120791
+    },
+    {
+      "name": "Purpur",
+      "count": 17140
+    },
+    {
+      "name": "Spigot",
+      "count": 13247
+    },
+    {
+      "name": "Unknown",
+      "count": 5815
+    },
+    {
+      "name": "Leaf",
+      "count": 3765
+    },
+    {
+      "name": "UniverseSpigot",
+      "count": 2142
+    },
+    {
+      "name": "Arclight",
+      "count": 1861
+    },
+    {
+      "name": "Mohist",
+      "count": 1170
+    },
+    {
+      "name": "Folia",
+      "count": 1027
+    },
+    {
+      "name": "CatServer",
+      "count": 821
+    },
+    {
+      "name": "AdvancedSlimePaper",
+      "count": 710
+    },
+    {
+      "name": "Leaves",
+      "count": 575
+    },
+    {
+      "name": "Other",
+      "count": 1612
+    }
   ]
 }
