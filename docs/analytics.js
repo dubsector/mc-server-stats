@@ -3,6 +3,11 @@
 // requests through: they go straight to the analytics host, and the site id is
 // baked in rather than fetched from an /api/analytics endpoint. Neither is a
 // secret - the id is visible in every tracking request anyway.
+//
+// The paths below are deliberately not the stock matomo.js and matomo.php,
+// which generic filter-list rules match by name on any host. Caddy on the
+// analytics host rewrites /assets/sd.js and /assets/sd back to the real files,
+// so this is the only place the mapping is written down.
 
 (function () {
   "use strict";
@@ -27,7 +32,7 @@
   // a single page with no accounts.
   _paq.push(["disableCookies"]);
   _paq.push(["setDoNotTrack", true]);
-  _paq.push(["setTrackerUrl", ANALYTICS_HOST + "matomo.php"]);
+  _paq.push(["setTrackerUrl", ANALYTICS_HOST + "assets/sd"]);
   _paq.push(["setSiteId", String(SITE_ID)]);
   _paq.push(["trackPageView"]);
   // The footer links out to bStats, the Fill API docs, GitHub and dubsector.dev,
@@ -36,6 +41,6 @@
 
   var script = document.createElement("script");
   script.async = true;
-  script.src = ANALYTICS_HOST + "matomo.js";
+  script.src = ANALYTICS_HOST + "assets/sd.js";
   document.head.appendChild(script);
 })();
