@@ -5006,6 +5006,10 @@
     ],
     [
       1788134400000,
+      1995
+    ],
+    [
+      1788220800000,
       1985
     ]
   ],
@@ -9247,6 +9251,83 @@
       {
         "version": "1.21.11",
         "count": 773,
+        "stable": true
+      }
+    ],
+    "2026-09-01": [
+      {
+        "version": "1.20",
+        "count": 1,
+        "stable": true
+      },
+      {
+        "version": "1.21",
+        "count": 1,
+        "stable": true
+      },
+      {
+        "version": "1.21.7",
+        "count": 1,
+        "stable": true
+      },
+      {
+        "version": "1.20.2",
+        "count": 2,
+        "stable": true
+      },
+      {
+        "version": "1.21.1",
+        "count": 3,
+        "stable": true
+      },
+      {
+        "version": "1.20.1",
+        "count": 4,
+        "stable": true
+      },
+      {
+        "version": "1.21.5",
+        "count": 5,
+        "stable": true
+      },
+      {
+        "version": "1.20.4",
+        "count": 6,
+        "stable": true
+      },
+      {
+        "version": "1.20.6",
+        "count": 6,
+        "stable": true
+      },
+      {
+        "version": "1.21.6",
+        "count": 12,
+        "stable": true
+      },
+      {
+        "version": "1.21.4",
+        "count": 49,
+        "stable": true
+      },
+      {
+        "version": "1.21.8",
+        "count": 61,
+        "stable": true
+      },
+      {
+        "version": "26.2",
+        "count": 434,
+        "stable": false
+      },
+      {
+        "version": "26.1.2",
+        "count": 620,
+        "stable": true
+      },
+      {
+        "version": "1.21.11",
+        "count": 780,
         "stable": true
       }
     ]
