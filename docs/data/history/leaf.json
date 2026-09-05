@@ -4458,7 +4458,11 @@
     ],
     [
       1788480000000,
-      4343
+      4384
+    ],
+    [
+      1788566400000,
+      4369
     ]
   ],
   "versions": {
@@ -9077,6 +9081,88 @@
       {
         "version": "1.21.11",
         "count": 2364,
+        "stable": true
+      }
+    ],
+    "2026-09-05": [
+      {
+        "version": "1.20.2",
+        "count": 2,
+        "stable": true
+      },
+      {
+        "version": "1.21",
+        "count": 2,
+        "stable": true
+      },
+      {
+        "version": "1.21.10",
+        "count": 2,
+        "stable": true
+      },
+      {
+        "version": "1.20.6",
+        "count": 3,
+        "stable": true
+      },
+      {
+        "version": "1.21.6",
+        "count": 4,
+        "stable": true
+      },
+      {
+        "version": "1.21.3",
+        "count": 5,
+        "stable": true
+      },
+      {
+        "version": "1.20.1",
+        "count": 8,
+        "stable": true
+      },
+      {
+        "version": "1.21.7",
+        "count": 11,
+        "stable": true
+      },
+      {
+        "version": "1.21.5",
+        "count": 16,
+        "stable": true
+      },
+      {
+        "version": "1.21.1",
+        "count": 37,
+        "stable": true
+      },
+      {
+        "version": "1.20.4",
+        "count": 48,
+        "stable": true
+      },
+      {
+        "version": "26.1.2",
+        "count": 194,
+        "stable": false
+      },
+      {
+        "version": "1.21.8",
+        "count": 290,
+        "stable": true
+      },
+      {
+        "version": "1.21.4",
+        "count": 456,
+        "stable": true
+      },
+      {
+        "version": "26.2",
+        "count": 933,
+        "stable": false
+      },
+      {
+        "version": "1.21.11",
+        "count": 2358,
         "stable": true
       }
     ]
