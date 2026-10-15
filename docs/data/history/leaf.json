@@ -4594,7 +4594,35 @@
     ],
     [
       1791417600000,
-      4460
+      4480
+    ],
+    [
+      1791504000000,
+      4472
+    ],
+    [
+      1791590400000,
+      4556
+    ],
+    [
+      1791676800000,
+      4534
+    ],
+    [
+      1791763200000,
+      4579
+    ],
+    [
+      1791849600000,
+      4515
+    ],
+    [
+      1791936000000,
+      4552
+    ],
+    [
+      1792022400000,
+      4523
     ]
   ],
   "versions": {
@@ -11897,6 +11925,88 @@
       {
         "version": "1.21.11",
         "count": 2374,
+        "stable": true
+      }
+    ],
+    "2026-10-15": [
+      {
+        "version": "1.20.2",
+        "count": 2,
+        "stable": true
+      },
+      {
+        "version": "1.21",
+        "count": 3,
+        "stable": true
+      },
+      {
+        "version": "1.21.6",
+        "count": 3,
+        "stable": true
+      },
+      {
+        "version": "1.21.3",
+        "count": 4,
+        "stable": true
+      },
+      {
+        "version": "1.20.6",
+        "count": 6,
+        "stable": true
+      },
+      {
+        "version": "1.20.1",
+        "count": 7,
+        "stable": true
+      },
+      {
+        "version": "1.21.7",
+        "count": 11,
+        "stable": true
+      },
+      {
+        "version": "1.21.5",
+        "count": 17,
+        "stable": true
+      },
+      {
+        "version": "1.21.1",
+        "count": 30,
+        "stable": true
+      },
+      {
+        "version": "1.20.4",
+        "count": 37,
+        "stable": true
+      },
+      {
+        "version": "26.1.2",
+        "count": 137,
+        "stable": false
+      },
+      {
+        "version": "1.21.8",
+        "count": 221,
+        "stable": true
+      },
+      {
+        "version": "26.3",
+        "count": 236,
+        "stable": false
+      },
+      {
+        "version": "1.21.4",
+        "count": 404,
+        "stable": true
+      },
+      {
+        "version": "26.2",
+        "count": 1023,
+        "stable": false
+      },
+      {
+        "version": "1.21.11",
+        "count": 2382,
         "stable": true
       }
     ]
