@@ -69,6 +69,28 @@ function downsampleDaily(points) {
   return firstNonZero === -1 ? [] : daily.slice(firstNonZero);
 }
 
+// A few forks report mangled version strings to bStats, like "26.2) (Legacy MC: 1.21" or
+// "26.2; Legacy MC: 1.21". Keep the leading version and drop the rest so those servers
+// count toward the real version instead of showing up as junk rows.
+function cleanVersionLabel(raw) {
+  const label = String(raw).trim();
+  const mangled = label.match(/^(\d+(?:\.\d+)+)\s*[);]/);
+  return mangled ? mangled[1] : label;
+}
+
+// Folds the mangled rows into their real version, keeping bStats' original row order.
+function mergePieRows(pieData) {
+  const rows = pieData.filter((e) => cleanVersionLabel(e.name) === e.name).map((e) => ({ ...e }));
+  for (const entry of pieData) {
+    const name = cleanVersionLabel(entry.name);
+    if (name === entry.name) continue;
+    const target = rows.find((r) => r.name === name);
+    if (target) target.y += entry.y;
+    else rows.push({ name, y: entry.y });
+  }
+  return rows;
+}
+
 function normalizeVersion(raw) {
   return raw
     .toLowerCase()
@@ -99,60 +121,72 @@ function channelIsStable(channel) {
   return STABLE_CHANNEL_NAMES.has(String(channel).toLowerCase());
 }
 
-// Builds a normalized-version -> isStable lookup by querying build channels for only the
-// most recent version families, since older releases are always long since stable and not
-// worth a network round trip.
-async function buildFillChannelMap(fillSlug) {
+// Runs fn over items with at most `limit` requests in flight, so checking dozens of
+// versions doesn't hammer the build APIs.
+async function mapLimit(items, limit, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+// Builds a normalized-version -> isStable lookup for every version that both shows up in
+// today's bStats data and exists in the project's build API. Checking only the newest
+// families broke as soon as a new release landed: a version that never got a stable build
+// (Folia 26.2, Leaf 26.1.2) would drop out of the lookup and fall back to the version-string
+// heuristic, which calls any plain version number stable.
+async function buildChannelMap(apiVersions, wanted, fetchBuilds, label) {
   const map = new Map();
+  const toCheck = apiVersions.filter((v) => wanted.has(normalizeVersion(v)));
+  await mapLimit(toCheck, 6, async (version) => {
+    try {
+      const stable = await fetchBuilds(version);
+      if (stable !== null) map.set(normalizeVersion(version), stable);
+    } catch (err) {
+      console.warn(`${label} builds lookup failed for ${version}: ${err.message}`);
+    }
+  });
+  return map;
+}
+
+async function buildFillChannelMap(fillSlug, wanted) {
   // If this fetch fails, fail the whole run: with no channel map, a brand-new
   // experimental version with a plain version string would be recorded as stable in
   // today's snapshot, and snapshots are never revisited. Tomorrow's run retries.
   const projectData = await fetchJson(`https://fill.papermc.io/v3/projects/${fillSlug}`);
+  const apiVersions = Object.values(projectData.versions || {}).flat();
 
-  const families = Object.keys(projectData.versions || {}).sort(compareVersionKeysDesc);
-  const recentFamilies = families.slice(0, 2);
-  const versionsToCheck = recentFamilies.flatMap((f) => projectData.versions[f]);
-
-  for (const version of versionsToCheck) {
-    try {
-      const builds = await fetchJson(
-        `https://fill.papermc.io/v3/projects/${fillSlug}/versions/${encodeURIComponent(version)}/builds`
-      );
-      if (Array.isArray(builds) && builds.length > 0) {
-        // builds are newest-first
-        map.set(normalizeVersion(version), channelIsStable(builds[0].channel));
-      }
-    } catch (err) {
-      console.warn(`fill builds lookup failed for ${fillSlug}/${version}: ${err.message}`);
-    }
-  }
-  return map;
+  return buildChannelMap(apiVersions, wanted, async (version) => {
+    const builds = await fetchJson(
+      `https://fill.papermc.io/v3/projects/${fillSlug}/versions/${encodeURIComponent(version)}/builds`
+    );
+    // fill.papermc.io returns builds newest-first
+    return Array.isArray(builds) && builds.length > 0 ? channelIsStable(builds[0].channel) : null;
+  }, `fill/${fillSlug}`);
 }
 
-async function buildLeafChannelMap() {
-  const map = new Map();
+async function buildLeafChannelMap(wanted) {
   // Same as buildFillChannelMap: a dead channel API must fail the run, not silently
   // degrade to the regex heuristic.
   const projectData = await fetchJson('https://api.leafmc.one/v2/projects/leaf');
+  const apiVersions = projectData.versions || [];
 
-  const versions = [...(projectData.versions || [])].sort(compareVersionKeysDesc);
-  const recentVersions = versions.slice(0, 3);
-
-  for (const version of recentVersions) {
-    try {
-      const data = await fetchJson(
-        `https://api.leafmc.one/v2/projects/leaf/versions/${encodeURIComponent(version)}/builds`
-      );
-      const builds = data.builds || data;
-      if (Array.isArray(builds) && builds.length > 0) {
-        // leafmc.one returns builds oldest-first, unlike fill.papermc.io
-        map.set(normalizeVersion(version), channelIsStable(builds[builds.length - 1].channel));
-      }
-    } catch (err) {
-      console.warn(`leafmc builds lookup failed for ${version}: ${err.message}`);
-    }
-  }
-  return map;
+  return buildChannelMap(apiVersions, wanted, async (version) => {
+    const data = await fetchJson(
+      `https://api.leafmc.one/v2/projects/leaf/versions/${encodeURIComponent(version)}/builds`
+    );
+    const builds = data.builds || data;
+    // leafmc.one returns builds oldest-first, unlike fill.papermc.io
+    return Array.isArray(builds) && builds.length > 0
+      ? channelIsStable(builds[builds.length - 1].channel)
+      : null;
+  }, 'leafmc');
 }
 
 function classifyVersion(rawVersion, channelMap) {
@@ -183,14 +217,17 @@ async function collectProject(key, project) {
     fetchBstatsLine(project.bstatsId, 'servers'),
   ]);
 
+  const pieRows = mergePieRows(pieData);
+  const wanted = new Set(pieRows.map((entry) => normalizeVersion(entry.name)));
+
   let channelMap = null;
   if (project.channelSource === 'fill') {
-    channelMap = await buildFillChannelMap(project.fillSlug);
+    channelMap = await buildFillChannelMap(project.fillSlug, wanted);
   } else if (project.channelSource === 'leafmc') {
-    channelMap = await buildLeafChannelMap();
+    channelMap = await buildLeafChannelMap(wanted);
   }
 
-  const versions = pieData.map((entry) => ({
+  const versions = pieRows.map((entry) => ({
     version: entry.name,
     count: entry.y,
     stable: classifyVersion(entry.name, channelMap),
@@ -203,7 +240,10 @@ async function collectProject(key, project) {
   existing.versions[todayKey()] = versions;
 
   await writeFile(filePath, JSON.stringify(existing, null, 2));
-  console.log(`  ${versions.length} versions, ${existing.servers.length} daily history points`);
+  console.log(
+    `  ${versions.length} versions (${channelMap ? channelMap.size : 0} from channel API), ` +
+      `${existing.servers.length} daily history points`
+  );
 }
 
 async function collectEcosystem() {

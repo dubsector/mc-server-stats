@@ -7,7 +7,7 @@
 [![Security Policy](https://img.shields.io/badge/Security-Policy-green)](SECURITY.md)
 [![Dependabot](https://img.shields.io/badge/Dependabot-enabled-025E8C?logo=dependabot)](https://github.com/dubsector/mc-server-stats/network/updates)
 
-Tracks Minecraft server software version adoption across Paper, Folia, Purpur, and Leaf, split by stable and experimental builds. The site answers questions like "is 26.2 safe to run yet?" and "how fast are servers leaving 1.21.11?" with real numbers instead of guesswork.
+Tracks Minecraft server software version adoption across Paper, Folia, Purpur, and Leaf, split by stable and experimental builds. The site answers questions like "is 26.3 safe to run on Folia yet?" and "how fast are servers leaving 1.21.11?" with real numbers instead of guesswork.
 
 Live site: https://dubsector.github.io/mc-server-stats/
 
@@ -43,7 +43,7 @@ A scheduled workflow runs `scripts/collect.mjs` every day shortly after midnight
 | Leaf build API (`api.leafmc.one`) | Build channels for Leaf |
 | String pattern heuristic | Stability for Purpur, which has no channel API. Versions matching pre-release, release candidate, or snapshot patterns count as experimental |
 
-A version counts as stable when the newest build for it sits in a stable channel. The channel APIs are only queried for the most recent version families; older versions are treated as stable unless the version string looks experimental.
+A version counts as stable when the newest build for it sits in a stable channel. Every version that shows up in the day's bStats data and exists in the project's build API gets checked, so a release that never got a stable build stays marked experimental after newer releases come out. Versions the API doesn't know about (snapshots, old releases a fork never built) fall back to the version-string check.
 
 ## Data files
 
@@ -58,6 +58,7 @@ A version counts as stable when the newest build for it sits in a stable channel
 - bStats only exposes per-version breakdowns as a current snapshot. There is no public history for them, so the per-version trend charts only accumulate from the day this collector first ran. They cannot be backfilled.
 - The same applies to the global server-software chart, so the default totals view accumulates one point per day from July 8, 2026. The "Incl. forks" view uses each project's own bStats history, which goes back years.
 - Purpur's stability tag is a best-effort guess from the version string, not an authoritative channel like the other three projects have.
+- A few forks report mangled version strings like `26.2) (Legacy MC: 1.21`. The collector folds those into the real version.
 - If a project's build-channel API is unreachable during collection, the run fails and retries the next day rather than recording guessed stability values. Individual failed build lookups within a working API fall back to the version-string heuristic.
 - The ecosystem panel is a current snapshot only. Some long-tail entries are dead forks that a few servers still run.
 
