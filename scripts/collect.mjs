@@ -18,23 +18,34 @@ const GLOBAL_SOFTWARE_PLUGIN_ID = 1;
 const GLOBAL_SOFTWARE_CHART = 'serverSoftware';
 const TOP_ECOSYSTEM_ENTRIES = 12;
 
+// Leaf serves the same Fill v3 API as PaperMC, from its own host. Its old
+// api.leafmc.one/v2 endpoint was retired in November 2026.
+const PAPERMC_FILL = 'https://fill.papermc.io/v3';
+const LEAF_FILL = 'https://dl.leafmc.one/v3';
+
 const PROJECTS = {
-  paper: { name: 'Paper', bstatsId: 580, channelSource: 'fill', fillSlug: 'paper' },
-  folia: { name: 'Folia', bstatsId: 18084, channelSource: 'fill', fillSlug: 'folia' },
+  paper: { name: 'Paper', bstatsId: 580, channelSource: 'fill', fillBase: PAPERMC_FILL, fillSlug: 'paper' },
+  folia: { name: 'Folia', bstatsId: 18084, channelSource: 'fill', fillBase: PAPERMC_FILL, fillSlug: 'folia' },
   purpur: { name: 'Purpur', bstatsId: 5103, channelSource: 'regex' },
-  leaf: { name: 'Leaf', bstatsId: 19539, channelSource: 'leafmc' },
+  leaf: { name: 'Leaf', bstatsId: 19539, channelSource: 'fill', fillBase: LEAF_FILL, fillSlug: 'leaf' },
 };
 
-const STABLE_CHANNEL_NAMES = new Set(['stable', 'release', 'default']);
+// Fill v3 channels are ALPHA, BETA, STABLE and RECOMMENDED.
+const STABLE_CHANNEL_NAMES = new Set(['stable', 'recommended', 'release', 'default']);
 
 const EXPERIMENTAL_PATTERN =
   /pre-?release|release candidate|\brc\b|-rc-?\d|-pre-?\d|\bsnapshot\b|^\d{2}w\d{2}[a-z]$/i;
 
 const FETCH_TIMEOUT_MS = 30000;
 
+// Fill v3 hosts reject requests whose User-Agent does not name the client and give a
+// contact URL (https://docs.papermc.io/misc/downloads-service/). Leaf's answers 403 to
+// Node's default.
+const USER_AGENT = 'mc-server-stats (https://github.com/dubsector/mc-server-stats)';
+
 async function fetchJson(url) {
   const res = await fetch(url, {
-    headers: { accept: 'application/json' },
+    headers: { accept: 'application/json', 'user-agent': USER_AGENT },
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
   if (!res.ok) {
@@ -155,38 +166,20 @@ async function buildChannelMap(apiVersions, wanted, fetchBuilds, label) {
   return map;
 }
 
-async function buildFillChannelMap(fillSlug, wanted) {
+async function buildFillChannelMap(fillBase, fillSlug, wanted) {
   // If this fetch fails, fail the whole run: with no channel map, a brand-new
   // experimental version with a plain version string would be recorded as stable in
   // today's snapshot, and snapshots are never revisited. Tomorrow's run retries.
-  const projectData = await fetchJson(`https://fill.papermc.io/v3/projects/${fillSlug}`);
+  const projectData = await fetchJson(`${fillBase}/projects/${fillSlug}`);
   const apiVersions = Object.values(projectData.versions || {}).flat();
 
   return buildChannelMap(apiVersions, wanted, async (version) => {
     const builds = await fetchJson(
-      `https://fill.papermc.io/v3/projects/${fillSlug}/versions/${encodeURIComponent(version)}/builds`
+      `${fillBase}/projects/${fillSlug}/versions/${encodeURIComponent(version)}/builds`
     );
-    // fill.papermc.io returns builds newest-first
+    // Fill v3 returns builds newest-first
     return Array.isArray(builds) && builds.length > 0 ? channelIsStable(builds[0].channel) : null;
-  }, `fill/${fillSlug}`);
-}
-
-async function buildLeafChannelMap(wanted) {
-  // Same as buildFillChannelMap: a dead channel API must fail the run, not silently
-  // degrade to the regex heuristic.
-  const projectData = await fetchJson('https://api.leafmc.one/v2/projects/leaf');
-  const apiVersions = projectData.versions || [];
-
-  return buildChannelMap(apiVersions, wanted, async (version) => {
-    const data = await fetchJson(
-      `https://api.leafmc.one/v2/projects/leaf/versions/${encodeURIComponent(version)}/builds`
-    );
-    const builds = data.builds || data;
-    // leafmc.one returns builds oldest-first, unlike fill.papermc.io
-    return Array.isArray(builds) && builds.length > 0
-      ? channelIsStable(builds[builds.length - 1].channel)
-      : null;
-  }, 'leafmc');
+  }, `${new URL(fillBase).host}/${fillSlug}`);
 }
 
 function classifyVersion(rawVersion, channelMap) {
@@ -222,9 +215,7 @@ async function collectProject(key, project) {
 
   let channelMap = null;
   if (project.channelSource === 'fill') {
-    channelMap = await buildFillChannelMap(project.fillSlug, wanted);
-  } else if (project.channelSource === 'leafmc') {
-    channelMap = await buildLeafChannelMap(wanted);
+    channelMap = await buildFillChannelMap(project.fillBase, project.fillSlug, wanted);
   }
 
   const versions = pieRows.map((entry) => ({

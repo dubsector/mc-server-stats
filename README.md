@@ -40,7 +40,7 @@ A scheduled workflow runs `scripts/collect.mjs` every day shortly after midnight
 |---|---|
 | [bStats](https://bstats.org) | Server counts per Minecraft version for each project, total server history, and the global server software breakdown |
 | [PaperMC Fill API](https://fill.papermc.io) | Build channels (stable, beta, alpha) for Paper and Folia |
-| Leaf build API (`api.leafmc.one`) | Build channels for Leaf |
+| [Leaf download API](https://dl.leafmc.one/v3/projects/leaf) (Fill v3) | Build channels for Leaf |
 | String pattern heuristic | Stability for Purpur, which has no channel API. Versions matching pre-release, release candidate, or snapshot patterns count as experimental |
 
 A version counts as stable when the newest build for it sits in a stable channel. Every version that shows up in the day's bStats data and exists in the project's build API gets checked, so a release that never got a stable build stays marked experimental after newer releases come out. Versions the API doesn't know about (snapshots, old releases a fork never built) fall back to the version-string check.
