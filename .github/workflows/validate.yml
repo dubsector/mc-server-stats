@@ -2,6 +2,11 @@ name: Validate
 
 on:
   pull_request:
+    # The daily data PR is validated by the workflow_dispatch run collect-data.yml
+    # starts. A pull_request run for it would only wait for approval (the PR comes
+    # from github-actions[bot]) and then fail when the branch is merged and deleted.
+    paths-ignore:
+      - 'docs/data/**'
   push:
     branches: [main]
   workflow_dispatch:
